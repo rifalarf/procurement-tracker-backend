@@ -1,0 +1,144 @@
+============================================
+ Deployment Package - Procurement Tracker
+ Created: 2024-12-31
+============================================
+
+📦 PACKAGE CONTENTS:
+--------------------
+- laravel_app.zip (12 MB) : Laravel application
+- public_html.zip (5.7 KB) : Public files + Deploy Admin
+
+============================================
+🚀 DEPLOYMENT GUIDE (TANPA SSH)
+============================================
+
+📌 STEP 1: Upload laravel_app.zip
+---------------------------------
+1. Login ke cPanel → File Manager
+2. Navigasi ke: /home/matf2269/
+3. Buat folder: pengadaan_app (jika belum ada)
+4. Masuk ke folder pengadaan_app
+5. Upload laravel_app.zip
+6. Klik kanan → Extract
+7. Hapus laravel_app.zip setelah extract
+
+📌 STEP 2: Upload public_html.zip
+---------------------------------
+1. Navigasi ke: /home/matf2269/public_html/pengadaan/
+2. HAPUS semua file lama (backup dulu jika perlu)
+3. Upload public_html.zip
+4. Klik kanan → Extract
+5. Hapus public_html.zip setelah extract
+
+📌 STEP 3: Set Permissions (via File Manager)
+---------------------------------------------
+1. Navigasi ke: /home/matf2269/pengadaan_app/
+2. Klik kanan folder "storage" → Change Permissions → 755 (recursive)
+3. Klik kanan folder "bootstrap/cache" → Change Permissions → 755
+
+📌 STEP 4: Gunakan Deploy Admin Panel
+-------------------------------------
+Buka browser:
+
+https://pengadaan.matrifix.site/deploy-admin.php?key=deploy-pengadaan-2024-secure
+
+OPSI YANG TERSEDIA:
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🔄 UPDATE EXISTING                                          │
+│    Gunakan ini jika project SUDAH ada dan hanya update code │
+│    - Clear cache                                            │
+│    - Run migrations (jika ada yang baru)                    │
+│    - Optimize cache                                         │
+├─────────────────────────────────────────────────────────────┤
+│ 🆕 FRESH INSTALL                                            │
+│    Gunakan ini untuk instalasi BARU dari nol                │
+│    - ⚠️ HAPUS SEMUA DATA!                                   │
+│    - Fresh migrations                                       │
+│    - Run all seeders (users, departments, statuses, etc)    │
+│    - Optimize cache                                         │
+├─────────────────────────────────────────────────────────────┤
+│ 📋 INDIVIDUAL OPTIONS:                                      │
+│    - Run Migrations only                                    │
+│    - Run Seeders only                                       │
+│    - Seed Users only                                        │
+│    - Seed Master Data only (Departments, Statuses, Buyers)  │
+│    - Clear Cache                                            │
+│    - Optimize Cache                                         │
+│    - Create Storage Link                                    │
+│    - Check App Status                                       │
+│    - Check Migration Status                                 │
+└─────────────────────────────────────────────────────────────┘
+
+📌 STEP 5: Test API
+-------------------
+Buka browser:
+https://pengadaan.matrifix.site/api/health
+
+Atau test login:
+POST https://pengadaan.matrifix.site/api/login
+{
+    "username": "admin",
+    "password": "password"
+}
+
+📌 STEP 6: HAPUS deploy-admin.php!
+----------------------------------
+⚠️ PENTING: Setelah deployment selesai, HAPUS file deploy-admin.php
+untuk keamanan!
+
+1. File Manager → /home/matf2269/public_html/pengadaan/
+2. Hapus file: deploy-admin.php
+
+============================================
+📍 STRUKTUR FOLDER DI CPANEL
+============================================
+
+/home/matf2269/
+├── public_html/
+│   └── pengadaan/              ← Document Root
+│       ├── index.php           ← Entry point (modified for cPanel)
+│       ├── .htaccess
+│       ├── deploy-admin.php    ← Admin panel (HAPUS setelah deploy!)
+│       └── storage/            ← Symlink ke storage/app/public
+│
+└── pengadaan_app/              ← Laravel Application (private)
+    ├── app/
+    ├── bootstrap/
+    ├── config/
+    ├── database/
+    ├── resources/
+    ├── routes/
+    ├── storage/
+    ├── vendor/
+    ├── .env                    ← Production environment
+    └── artisan
+
+============================================
+🔗 URLS
+============================================
+Backend API : https://pengadaan.matrifix.site/api
+Frontend    : https://proctrack.vercel.app
+Admin Panel : https://pengadaan.matrifix.site/deploy-admin.php?key=deploy-pengadaan-2024-secure
+
+============================================
+🔧 TROUBLESHOOTING
+============================================
+
+❌ Error 500:
+   - Cek permissions storage/ dan bootstrap/cache/
+   - Buka deploy-admin.php → App Status untuk cek error
+
+❌ Error 404:
+   - Pastikan .htaccess sudah ada
+   - Cek index.php path benar
+
+❌ Database Error:
+   - Buka deploy-admin.php → App Status untuk cek koneksi DB
+   - Pastikan credentials di .env benar
+
+❌ CORS Error:
+   - Clear cache via deploy-admin.php
+   - Pastikan FRONTEND_URL di .env benar
+
+============================================
