@@ -35,6 +35,8 @@ class ProcurementItemResource extends JsonResource
                 return $this->buyer ? [
                     'id' => $this->buyer->id,
                     'name' => $this->buyer->name,
+                    'color' => $this->buyer->color,
+                    'user_id' => $this->buyer->user_id,
                 ] : null;
             }),
             'status' => $this->whenLoaded('status', function () {

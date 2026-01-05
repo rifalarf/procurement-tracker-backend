@@ -39,12 +39,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
     });
 
-    // Master Data - Buyers (now uses users with role=buyer)
+    // Master Data - Buyers
     Route::get('/buyers', [BuyerController::class, 'index']);
     Route::middleware('role:admin')->group(function () {
         Route::post('/buyers', [BuyerController::class, 'store']);
-        Route::put('/buyers/{user}', [BuyerController::class, 'update']);
-        Route::delete('/buyers/{user}', [BuyerController::class, 'destroy']);
+        Route::put('/buyers/{buyer}', [BuyerController::class, 'update']);
+        Route::delete('/buyers/{buyer}', [BuyerController::class, 'destroy']);
     });
 
     // Master Data - Statuses

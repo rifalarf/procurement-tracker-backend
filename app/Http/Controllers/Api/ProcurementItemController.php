@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreProcurementItemRequest;
+use App\Http\Requests\UpdateProcurementItemRequest;
+use App\Http\Requests\UpdateStatusRequest;
+use App\Http\Requests\UpdateBuyerRequest;
 use App\Http\Resources\ProcurementItemResource;
 use App\Models\ActivityLog;
 use App\Models\ProcurementItem;
@@ -11,6 +15,28 @@ use Illuminate\Http\Request;
 
 class ProcurementItemController extends Controller
 {
+    /**
+     * Allowed columns for sorting to prevent SQL injection
+     */
+    private const ALLOWED_SORT_COLUMNS = [
+        'id',
+        'no_pr',
+        'nama_barang',
+        'qty',
+        'nilai',
+        'created_at',
+        'updated_at',
+        'tgl_terima_dokumen',
+        'tgl_status',
+        'tgl_po',
+        'tgl_datang',
+        'status_id',
+        'department_id',
+        'buyer_id',
+        'user_requester',
+        'item_category',
+    ];
+
     /**
      * List all procurement items with filters and pagination
      */
@@ -44,10 +70,12 @@ class ProcurementItemController extends Controller
 
         // Filter for buyer visibility: show items assigned to this user OR unassigned items
         // Used by MemberDashboard to show items the buyer can claim
-        if ($forBuyer = $request->input('for_buyer')) {
-            $query->where(function ($q) use ($forBuyer) {
-                $q->where('buyer_id', $forBuyer)
-                  ->orWhereNull('buyer_id');
+        // We need to join with buyers table to check buyer.user_id matches the requesting user
+        if ($forBuyerUserId = $request->input('for_buyer')) {
+            $query->where(function ($q) use ($forBuyerUserId) {
+                $q->whereHas('buyer', function ($buyerQuery) use ($forBuyerUserId) {
+                    $buyerQuery->where('user_id', $forBuyerUserId);
+                })->orWhereNull('buyer_id');
             });
         }
 
@@ -56,9 +84,17 @@ class ProcurementItemController extends Controller
             $query->where('user_requester', 'like', "%{$user}%");
         }
 
-        // Sorting
+        // Sorting - validate against whitelist to prevent SQL injection
         $sortBy = $request->input('sort_by', 'created_at');
-        $sortDir = $request->input('sort_dir', 'desc');
+        $sortDir = strtolower($request->input('sort_dir', 'desc'));
+        
+        if (!in_array($sortBy, self::ALLOWED_SORT_COLUMNS)) {
+            $sortBy = 'created_at';
+        }
+        if (!in_array($sortDir, ['asc', 'desc'])) {
+            $sortDir = 'desc';
+        }
+        
         $query->orderBy($sortBy, $sortDir);
 
         // Pagination
@@ -81,6 +117,8 @@ class ProcurementItemController extends Controller
      */
     public function show(ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('view', $procurementItem);
+        
         $procurementItem->load(['department', 'buyer', 'status']);
 
         return response()->json([
@@ -107,31 +145,9 @@ class ProcurementItemController extends Controller
     /**
      * Store a new procurement item
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreProcurementItemRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'no_pr' => 'required|string|max:50|unique:procurement_items,no_pr',
-            'mat_code' => 'nullable|string|max:50',
-            'nama_barang' => 'nullable|string|max:500',
-            'item_category' => 'nullable|string|max:100',
-            'qty' => 'integer|min:0',
-            'um' => 'nullable|string|max:50',
-            'pg' => 'nullable|string|max:50',
-            'user_requester' => 'nullable|string|max:255',
-            'nilai' => 'numeric|min:0',
-            'department_id' => 'nullable|exists:departments,id',
-            'tgl_terima_dokumen' => 'nullable|date',
-            'procx_manual' => 'in:PROCX,MANUAL',
-            'buyer_id' => 'nullable|exists:users,id',
-            'status_id' => 'nullable|exists:statuses,id',
-            'tgl_status' => 'nullable|date',
-            'emergency' => 'boolean',
-            'no_po' => 'nullable|string|max:50',
-            'nama_vendor' => 'nullable|string|max:255',
-            'tgl_po' => 'nullable|date',
-            'tgl_datang' => 'nullable|date',
-            'keterangan' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
 
         // Map frontend field names to database column names
         if (isset($validated['emergency'])) {
@@ -155,50 +171,20 @@ class ProcurementItemController extends Controller
     /**
      * Update a procurement item
      */
-    public function update(Request $request, ProcurementItem $procurementItem): JsonResponse
+    public function update(UpdateProcurementItemRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('update', $procurementItem);
+        
         $oldValues = $procurementItem->toArray();
         $user = $request->user();
+        $validated = $request->validated();
 
-        // Define allowed fields based on user role
+        // For buyers, automatically update tgl_status when status changes
         if ($user->role === 'buyer') {
-            // Buyers can only update status_id, pg, and keterangan
-            $validated = $request->validate([
-                'status_id' => 'nullable|exists:statuses,id',
-                'pg' => 'nullable|string|max:50',
-                'keterangan' => 'nullable|string',
-            ]);
-
-            // Automatically update tgl_status when status changes
             if (isset($validated['status_id']) && $validated['status_id'] != $procurementItem->status_id) {
                 $validated['tgl_status'] = now();
             }
         } else {
-            // Admins can update all fields
-            $validated = $request->validate([
-                'no_pr' => 'sometimes|string|max:50|unique:procurement_items,no_pr,' . $procurementItem->id,
-                'mat_code' => 'nullable|string|max:50',
-                'nama_barang' => 'nullable|string|max:500',
-                'item_category' => 'nullable|string|max:100',
-                'qty' => 'sometimes|integer|min:0',
-                'um' => 'nullable|string|max:50',
-                'pg' => 'nullable|string|max:50',
-                'user_requester' => 'nullable|string|max:255',
-                'nilai' => 'nullable|numeric|min:0',
-                'department_id' => 'nullable|exists:departments,id',
-                'tgl_terima_dokumen' => 'nullable|date',
-                'procx_manual' => 'nullable|in:PROCX,MANUAL',
-                'buyer_id' => 'nullable|exists:users,id',
-                'status_id' => 'nullable|exists:statuses,id',
-                'tgl_status' => 'nullable|date',
-                'emergency' => 'boolean',
-                'no_po' => 'nullable|string|max:50',
-                'nama_vendor' => 'nullable|string|max:255',
-                'tgl_po' => 'nullable|date',
-                'tgl_datang' => 'nullable|date',
-                'keterangan' => 'nullable|string',
-            ]);
-
             // Map frontend field names to database column names
             if (isset($validated['emergency'])) {
                 $validated['is_emergency'] = $validated['emergency'];
@@ -222,13 +208,13 @@ class ProcurementItemController extends Controller
     /**
      * Update only the status of a procurement item
      */
-    public function updateStatus(Request $request, ProcurementItem $procurementItem): JsonResponse
+    public function updateStatus(UpdateStatusRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('update', $procurementItem);
+        
         $oldValues = ['status_id' => $procurementItem->status_id];
 
-        $validated = $request->validate([
-            'status_id' => 'nullable|exists:statuses,id',
-        ]);
+        $validated = $request->validated();
 
         // If status is being set, update the date; if cleared, remove the date
         if ($validated['status_id'] !== null) {
@@ -253,13 +239,13 @@ class ProcurementItemController extends Controller
     /**
      * Update only the buyer of a procurement item
      */
-    public function updateBuyer(Request $request, ProcurementItem $procurementItem): JsonResponse
+    public function updateBuyer(UpdateBuyerRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('assignBuyer', $procurementItem);
+        
         $oldValues = ['buyer_id' => $procurementItem->buyer_id];
 
-        $validated = $request->validate([
-            'buyer_id' => 'nullable|exists:users,id',
-        ]);
+        $validated = $request->validated();
 
         $validated['updated_by'] = $request->user()->id;
 
