@@ -13,6 +13,7 @@ class Buyer extends Model
         'name',
         'code',
         'color',
+        'text_color',
         'is_active',
         'user_id',
     ];

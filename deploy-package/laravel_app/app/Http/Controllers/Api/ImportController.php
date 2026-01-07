@@ -44,6 +44,7 @@ class ImportController extends Controller
         'Tanggal PO' => 'tgl_po',
         'Tanggal Datang' => 'tgl_datang',
         'Keterangan' => 'keterangan',
+        'Item Category' => 'item_category',
     ];
 
     /**
@@ -178,13 +179,9 @@ class ImportController extends Controller
             $headers = array_map('trim', $rows[0]);
             $mappings = $session->mappings->keyBy('excel_column');
             
-            // Get existing NO PRs to check duplicates
-            $existingNoPrs = ProcurementItem::pluck('no_pr')->toArray();
-            
             $previewData = [];
             $validRows = 0;
             $skippedRows = 0;
-            $duplicateRows = 0;
             
             // Preview first 10 rows
             $previewLimit = min(count($rows), 11); // Header + 10 data rows
@@ -202,13 +199,6 @@ class ImportController extends Controller
                         $status = 'skip';
                         $errors[] = "Missing required field: $field";
                     }
-                }
-                
-                // Check duplicates
-                if (!empty($rowData['no_pr']) && in_array($rowData['no_pr'], $existingNoPrs)) {
-                    $status = 'duplicate';
-                    $errors[] = "NO PR already exists";
-                    $duplicateRows++;
                 }
                 
                 if ($status === 'valid') {
@@ -232,7 +222,6 @@ class ImportController extends Controller
                     'preview_count' => count($previewData),
                     'estimated_valid' => $validRows,
                     'estimated_skipped' => $skippedRows,
-                    'estimated_duplicates' => $duplicateRows,
                 ],
                 'mappings' => $session->mappings,
             ]);
@@ -269,17 +258,15 @@ class ImportController extends Controller
             $headers = array_map('trim', $rows[0]);
             $mappings = $session->mappings->keyBy('excel_column');
             
-            // Get existing NO PRs to check duplicates
-            $existingNoPrs = ProcurementItem::pluck('no_pr')->toArray();
-            
             // Cache for lookups
             $departments = Department::pluck('id', 'name')->toArray();
-            $buyers = \App\Models\User::where('role', 'buyer')->pluck('id', 'name')->toArray();
+            $buyers = Buyer::pluck('id', 'name')->toArray();
             $statuses = Status::pluck('id', 'name')->toArray();
             
             $successCount = 0;
             $errorCount = 0;
             $skippedCount = 0;
+            $updatedCount = 0;
             $errors = [];
             
             DB::beginTransaction();
@@ -302,11 +289,7 @@ class ImportController extends Controller
                     continue;
                 }
                 
-                // Skip duplicates
-                if (in_array($rowData['no_pr'], $existingNoPrs)) {
-                    $skippedCount++;
-                    continue;
-                }
+
                 
                 try {
                     // Resolve lookups
@@ -321,9 +304,21 @@ class ImportController extends Controller
                     // Add metadata
                     $rowData['created_by'] = auth()->id();
                     
-                    ProcurementItem::create($rowData);
-                    $existingNoPrs[] = $rowData['no_pr']; // Add to duplicate check
-                    $successCount++;
+                    // Use updateOrCreate to handle duplicates
+                    // If no_pr exists, update the record; otherwise, create new
+                    $noPr = $rowData['no_pr'];
+                    unset($rowData['no_pr']); // Remove from data array, will be used as key
+                    
+                    $existing = ProcurementItem::where('no_pr', $noPr)->first();
+                    
+                    if ($existing) {
+                        $existing->update($rowData);
+                        $updatedCount++;
+                    } else {
+                        $rowData['no_pr'] = $noPr;
+                        ProcurementItem::create($rowData);
+                        $successCount++;
+                    }
                     
                 } catch (\Exception $e) {
                     $errorCount++;
@@ -336,8 +331,8 @@ class ImportController extends Controller
             // Update session
             $session->update([
                 'status' => 'completed',
-                'processed_rows' => $successCount + $errorCount + $skippedCount,
-                'success_rows' => $successCount,
+                'processed_rows' => $successCount + $updatedCount + $errorCount + $skippedCount,
+                'success_rows' => $successCount + $updatedCount,
                 'error_rows' => $errorCount,
             ]);
             
@@ -347,6 +342,7 @@ class ImportController extends Controller
             return response()->json([
                 'message' => 'Import completed',
                 'success_count' => $successCount,
+                'updated_count' => $updatedCount,
                 'error_count' => $errorCount,
                 'skipped_count' => $skippedCount,
                 'errors' => array_slice($errors, 0, 10), // Return first 10 errors
@@ -511,6 +507,7 @@ class ImportController extends Controller
             ['value' => 'tgl_po', 'label' => 'Tanggal PO', 'required' => false],
             ['value' => 'tgl_datang', 'label' => 'Tanggal Datang', 'required' => false],
             ['value' => 'keterangan', 'label' => 'Keterangan', 'required' => false],
+            ['value' => 'item_category', 'label' => 'Item Category', 'required' => false],
         ];
     }
 
@@ -556,15 +553,28 @@ class ImportController extends Controller
         }
         
         // Resolve buyer
-        if (isset($data['buyer_id']) && !is_numeric($data['buyer_id'])) {
-            $buyerName = $data['buyer_id'];
-            $data['buyer_id'] = $buyers[$buyerName] ?? null;
-            
-            if (!$data['buyer_id']) {
-                foreach ($buyers as $name => $id) {
-                    if (strtolower($name) === strtolower($buyerName)) {
-                        $data['buyer_id'] = $id;
-                        break;
+        if (isset($data['buyer_id']) && $data['buyer_id'] !== null && $data['buyer_id'] !== '') {
+            if (is_numeric($data['buyer_id'])) {
+                // Numeric buyer_id - validate it exists in buyers table
+                $buyerId = (int) $data['buyer_id'];
+                // Check if this ID exists in buyers (the values in $buyers array are the IDs)
+                if (!in_array($buyerId, $buyers)) {
+                    // ID doesn't exist in buyers table, set to null
+                    $data['buyer_id'] = null;
+                } else {
+                    $data['buyer_id'] = $buyerId;
+                }
+            } else {
+                // String buyer name - resolve by name
+                $buyerName = $data['buyer_id'];
+                $data['buyer_id'] = $buyers[$buyerName] ?? null;
+                
+                if (!$data['buyer_id']) {
+                    foreach ($buyers as $name => $id) {
+                        if (strtolower($name) === strtolower($buyerName)) {
+                            $data['buyer_id'] = $id;
+                            break;
+                        }
                     }
                 }
             }
@@ -637,12 +647,11 @@ class ImportController extends Controller
      */
     private function parseSpecialFields(array $data): array
     {
-        // Parse is_emergency - default to false if not set or empty
+        // Parse is_emergency - now stores as string, not boolean
         if (isset($data['is_emergency']) && !empty($data['is_emergency'])) {
-            $value = strtolower(trim((string) $data['is_emergency']));
-            $data['is_emergency'] = in_array($value, ['yes', 'ya', 'true', '1', 'y']);
+            $data['is_emergency'] = trim((string) $data['is_emergency']);
         } else {
-            $data['is_emergency'] = false;
+            $data['is_emergency'] = null;
         }
         
         // Parse qty - default to 0 if not set
@@ -654,8 +663,33 @@ class ImportController extends Controller
         
         // Parse nilai - default to 0 if not set
         if (isset($data['nilai']) && $data['nilai'] !== null && $data['nilai'] !== '') {
-            $nilai = str_replace([',', '.'], ['', '.'], (string) $data['nilai']);
-            $data['nilai'] = (float) preg_replace('/[^0-9.]/', '', $nilai);
+            $nilai = (string) $data['nilai'];
+            
+            // Check if it's already a plain number (from Excel numeric cell)
+            if (is_numeric($data['nilai'])) {
+                $data['nilai'] = (float) $data['nilai'];
+            } else {
+                // Handle Indonesian format: dots as thousand separators, comma as decimal
+                // e.g., "568.453.820" or "1.234.567,89"
+                
+                // Count dots and commas to determine format
+                $dotCount = substr_count($nilai, '.');
+                $commaCount = substr_count($nilai, ',');
+                
+                if ($dotCount > 1 || ($dotCount >= 1 && $commaCount == 0)) {
+                    // Indonesian format: dots are thousand separators
+                    // Remove all dots (thousand separators)
+                    $nilai = str_replace('.', '', $nilai);
+                    // Replace comma with dot if present (decimal separator)
+                    $nilai = str_replace(',', '.', $nilai);
+                } else {
+                    // US/International format: commas are thousand separators, dot is decimal
+                    $nilai = str_replace(',', '', $nilai);
+                }
+                
+                // Remove any remaining non-numeric characters except dot
+                $data['nilai'] = (float) preg_replace('/[^0-9.]/', '', $nilai);
+            }
         } else {
             $data['nilai'] = 0;
         }

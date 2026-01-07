@@ -57,10 +57,34 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user is AVP
+     */
+    public function isAvp(): bool
+    {
+        return $this->role === 'avp';
+    }
+
+    /**
+     * Check if user is Staff
+     */
+    public function isStaff(): bool
+    {
+        return $this->role === 'staff';
+    }
+
+    /**
      * Departments relationship (many-to-many)
      */
     public function departments()
     {
         return $this->belongsToMany(Department::class, 'user_departments');
+    }
+
+    /**
+     * Buyer profile relationship (one-to-one)
+     */
+    public function buyer()
+    {
+        return $this->hasOne(Buyer::class);
     }
 }

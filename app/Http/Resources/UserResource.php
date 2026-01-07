@@ -21,6 +21,13 @@ class UserResource extends JsonResource
                     'name' => $dept->name,
                 ]);
             }),
+            'buyer' => $this->whenLoaded('buyer', function () {
+                return $this->buyer ? [
+                    'id' => $this->buyer->id,
+                    'color' => $this->buyer->color,
+                    'text_color' => $this->buyer->text_color,
+                ] : null;
+            }),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

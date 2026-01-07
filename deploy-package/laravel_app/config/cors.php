@@ -19,15 +19,21 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        env('FRONTEND_URL', 'http://localhost:5173'),
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-    ],
+    /*
+    |--------------------------------------------------------------------------
+    | Production: Set FRONTEND_URL in .env to your production frontend domain.
+    | Development: localhost origins are allowed via patterns below when APP_ENV=local
+    |--------------------------------------------------------------------------
+    */
+    'allowed_origins' => array_filter([
+        env('FRONTEND_URL'),
+    ]),
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => env('APP_ENV') === 'local' ? [
+        '/^https?:\/\/localhost:\d+$/',
+        '/^https?:\/\/127\.0\.0\.1:\d+$/',
+        '/^https?:\/\/.*testsprite\.com.*$/',  // TestSprite cloud testing
+    ] : [],
 
     'allowed_headers' => ['*'],
 

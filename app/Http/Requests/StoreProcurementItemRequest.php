@@ -29,7 +29,7 @@ class StoreProcurementItemRequest extends FormRequest
             'buyer_id' => 'nullable|exists:buyers,id',
             'status_id' => 'nullable|exists:statuses,id',
             'tgl_status' => 'nullable|date',
-            'emergency' => 'boolean',
+            'emergency' => 'nullable|string|max:50',
             'no_po' => 'nullable|string|max:50',
             'nama_vendor' => 'nullable|string|max:255',
             'tgl_po' => 'nullable|date',

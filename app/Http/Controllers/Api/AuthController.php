@@ -95,4 +95,22 @@ class AuthController extends Controller
             'message' => 'Password changed successfully',
         ]);
     }
+
+    /**
+     * Update user profile (name)
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $user = $request->user();
+        $user->update($validated);
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'user' => new UserResource($user->load('departments')),
+        ]);
+    }
 }

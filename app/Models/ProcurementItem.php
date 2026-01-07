@@ -43,7 +43,6 @@ class ProcurementItem extends Model
         'tgl_status' => 'date',
         'tgl_po' => 'date',
         'tgl_datang' => 'date',
-        'is_emergency' => 'boolean',
     ];
 
     public function department()

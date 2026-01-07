@@ -32,6 +32,7 @@ return [
     'allowed_origins_patterns' => env('APP_ENV') === 'local' ? [
         '/^https?:\/\/localhost:\d+$/',
         '/^https?:\/\/127\.0\.0\.1:\d+$/',
+        '/^https?:\/\/.*testsprite\.com.*$/',  // TestSprite cloud testing
     ] : [],
 
     'allowed_headers' => ['*'],

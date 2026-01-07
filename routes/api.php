@@ -29,6 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::put('/password', [AuthController::class, 'changePassword']);
+        Route::put('/profile', [AuthController::class, 'updateProfile']);
     });
 
     // Master Data - Departments
@@ -57,13 +58,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Procurement Items
     Route::get('/procurement-items', [ProcurementItemController::class, 'index']);
+    Route::get('/procurement-items/export', [ProcurementItemController::class, 'export']);
     Route::get('/procurement-items/user-requesters', [ProcurementItemController::class, 'getUserRequesters']);
     Route::get('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'show']);
     Route::post('/procurement-items', [ProcurementItemController::class, 'store']);
     Route::put('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'update']);
     Route::patch('/procurement-items/{procurementItem}/status', [ProcurementItemController::class, 'updateStatus']);
     Route::patch('/procurement-items/{procurementItem}/buyer', [ProcurementItemController::class, 'updateBuyer']);
-    Route::middleware('role:admin')->group(function () {
+    Route::middleware('role:admin,avp')->group(function () {
         Route::delete('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'destroy']);
     });
 
@@ -87,7 +89,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Activity Logs
-    Route::middleware('role:admin')->group(function () {
+    Route::middleware('role:admin,avp')->group(function () {
         Route::get('/activity-logs', [ActivityLogController::class, 'index']);
     });
     Route::get('/activity-logs/my', [ActivityLogController::class, 'myLogs']);

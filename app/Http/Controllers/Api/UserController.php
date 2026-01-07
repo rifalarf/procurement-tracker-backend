@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Models\Buyer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -17,7 +18,7 @@ class UserController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = User::with('departments');
+        $query = User::with(['departments', 'buyer']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -58,7 +59,7 @@ class UserController extends Controller
     public function show(User $user): JsonResponse
     {
         return response()->json([
-            'data' => new UserResource($user->load('departments')),
+            'data' => new UserResource($user->load(['departments', 'buyer'])),
         ]);
     }
 
@@ -71,9 +72,11 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'username' => 'required|string|max:100|unique:users,username',
             'password' => ['required', 'string', Password::min(8)],
-            'role' => 'required|in:admin,buyer',
+            'role' => 'required|in:admin,buyer,avp,staff',
             'department_ids' => 'array',
             'department_ids.*' => 'exists:departments,id',
+            'buyer_color' => 'nullable|string|max:7',
+            'buyer_text_color' => 'nullable|string|max:7',
         ]);
 
         $user = User::create([
@@ -89,9 +92,20 @@ class UserController extends Controller
             $user->departments()->attach($validated['department_ids']);
         }
 
+        // Create or update buyer record for buyer role
+        if ($validated['role'] === 'buyer') {
+            Buyer::create([
+                'name' => $validated['name'],
+                'user_id' => $user->id,
+                'color' => $validated['buyer_color'] ?? '#e8eaed',
+                'text_color' => $validated['buyer_text_color'] ?? '#ffffff',
+                'is_active' => true,
+            ]);
+        }
+
         return response()->json([
             'message' => 'User created successfully',
-            'data' => new UserResource($user->load('departments')),
+            'data' => new UserResource($user->load(['departments', 'buyer'])),
         ], 201);
     }
 
@@ -104,10 +118,12 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'username' => 'required|string|max:100|unique:users,username,' . $user->id,
             'password' => ['nullable', 'string', Password::min(8)],
-            'role' => 'required|in:admin,buyer',
+            'role' => 'required|in:admin,buyer,avp,staff',
             'is_active' => 'boolean',
             'department_ids' => 'array',
             'department_ids.*' => 'exists:departments,id',
+            'buyer_color' => 'nullable|string|max:7',
+            'buyer_text_color' => 'nullable|string|max:7',
         ]);
 
         $updateData = [
@@ -131,9 +147,33 @@ class UserController extends Controller
             $user->departments()->sync($validated['department_ids']);
         }
 
+        // Update buyer colors if role is buyer
+        if ($validated['role'] === 'buyer') {
+            $buyer = $user->buyer;
+            if ($buyer) {
+                $buyerUpdate = ['name' => $validated['name']];
+                if (isset($validated['buyer_color'])) {
+                    $buyerUpdate['color'] = $validated['buyer_color'];
+                }
+                if (isset($validated['buyer_text_color'])) {
+                    $buyerUpdate['text_color'] = $validated['buyer_text_color'];
+                }
+                $buyer->update($buyerUpdate);
+            } else {
+                // Create buyer if doesn't exist
+                Buyer::create([
+                    'name' => $validated['name'],
+                    'user_id' => $user->id,
+                    'color' => $validated['buyer_color'] ?? '#e8eaed',
+                    'text_color' => $validated['buyer_text_color'] ?? '#ffffff',
+                    'is_active' => true,
+                ]);
+            }
+        }
+
         return response()->json([
             'message' => 'User updated successfully',
-            'data' => new UserResource($user->load('departments')),
+            'data' => new UserResource($user->load(['departments', 'buyer'])),
         ]);
     }
 

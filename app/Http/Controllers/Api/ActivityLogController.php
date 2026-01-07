@@ -12,12 +12,22 @@ use Illuminate\Http\Request;
 class ActivityLogController extends Controller
 {
     /**
-     * List all activity logs with pagination (admin only)
+     * List all activity logs with pagination (admin and AVP)
+     * AVP can only see logs from procurement items in their assigned departments
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
         $query = ActivityLog::with(['user', 'procurementItem'])
             ->orderBy('created_at', 'desc');
+
+        // AVP can only see logs from items in their assigned departments
+        if ($user->role === 'avp') {
+            $departmentIds = $user->departments()->pluck('departments.id')->toArray();
+            $query->whereHas('procurementItem', function ($q) use ($departmentIds) {
+                $q->whereIn('department_id', $departmentIds);
+            });
+        }
 
         // Filter by event type
         if ($eventType = $request->input('event_type')) {
@@ -45,18 +55,21 @@ class ActivityLogController extends Controller
     }
 
     /**
-     * Get activity logs for the logged-in buyer's items
+     * Get activity logs for the logged-in user
+     * - Buyer/Staff: logs for items in their departments
      */
     public function myLogs(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        // buyer_id now directly references users table, so we can use user->id directly
-        $itemIds = ProcurementItem::where('buyer_id', $user->id)->pluck('id')->toArray();
-
         $query = ActivityLog::with(['user', 'procurementItem'])
-            ->whereIn('procurement_item_id', $itemIds)
             ->orderBy('created_at', 'desc');
+
+        // Buyer and Staff see logs for all items in their departments
+        $departmentIds = $user->departments()->pluck('departments.id')->toArray();
+        $query->whereHas('procurementItem', function ($q) use ($departmentIds) {
+            $q->whereIn('department_id', $departmentIds);
+        });
 
         // Pagination
         $perPage = min($request->input('per_page', 20), 100);

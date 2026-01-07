@@ -19,9 +19,13 @@ class UpdateProcurementItemRequest extends FormRequest
         // Buyers have limited fields they can update
         if ($user->role === 'buyer') {
             return [
+                'buyer_id' => 'nullable|exists:buyers,id',
                 'status_id' => 'nullable|exists:statuses,id',
-                'pg' => 'nullable|string|max:50',
-                'keterangan' => 'nullable|string',
+                'tgl_status' => 'nullable|date',
+                'emergency' => 'nullable|string|max:50',
+                'no_po' => 'nullable|string|max:50',
+                'nama_vendor' => 'nullable|string|max:255',
+                'tgl_po' => 'nullable|date',
             ];
         }
         
@@ -42,7 +46,7 @@ class UpdateProcurementItemRequest extends FormRequest
             'buyer_id' => 'nullable|exists:buyers,id',
             'status_id' => 'nullable|exists:statuses,id',
             'tgl_status' => 'nullable|date',
-            'emergency' => 'boolean',
+            'emergency' => 'nullable|string|max:50',
             'no_po' => 'nullable|string|max:50',
             'nama_vendor' => 'nullable|string|max:255',
             'tgl_po' => 'nullable|date',

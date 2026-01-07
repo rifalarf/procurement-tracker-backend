@@ -266,6 +266,7 @@ class ImportController extends Controller
             $successCount = 0;
             $errorCount = 0;
             $skippedCount = 0;
+            $updatedCount = 0;
             $errors = [];
             
             DB::beginTransaction();
@@ -303,8 +304,21 @@ class ImportController extends Controller
                     // Add metadata
                     $rowData['created_by'] = auth()->id();
                     
-                    ProcurementItem::create($rowData);
-                    $successCount++;
+                    // Use updateOrCreate to handle duplicates
+                    // If no_pr exists, update the record; otherwise, create new
+                    $noPr = $rowData['no_pr'];
+                    unset($rowData['no_pr']); // Remove from data array, will be used as key
+                    
+                    $existing = ProcurementItem::where('no_pr', $noPr)->first();
+                    
+                    if ($existing) {
+                        $existing->update($rowData);
+                        $updatedCount++;
+                    } else {
+                        $rowData['no_pr'] = $noPr;
+                        ProcurementItem::create($rowData);
+                        $successCount++;
+                    }
                     
                 } catch (\Exception $e) {
                     $errorCount++;
@@ -317,8 +331,8 @@ class ImportController extends Controller
             // Update session
             $session->update([
                 'status' => 'completed',
-                'processed_rows' => $successCount + $errorCount + $skippedCount,
-                'success_rows' => $successCount,
+                'processed_rows' => $successCount + $updatedCount + $errorCount + $skippedCount,
+                'success_rows' => $successCount + $updatedCount,
                 'error_rows' => $errorCount,
             ]);
             
@@ -328,6 +342,7 @@ class ImportController extends Controller
             return response()->json([
                 'message' => 'Import completed',
                 'success_count' => $successCount,
+                'updated_count' => $updatedCount,
                 'error_count' => $errorCount,
                 'skipped_count' => $skippedCount,
                 'errors' => array_slice($errors, 0, 10), // Return first 10 errors
@@ -632,12 +647,11 @@ class ImportController extends Controller
      */
     private function parseSpecialFields(array $data): array
     {
-        // Parse is_emergency - default to false if not set or empty
+        // Parse is_emergency - now stores as string, not boolean
         if (isset($data['is_emergency']) && !empty($data['is_emergency'])) {
-            $value = strtolower(trim((string) $data['is_emergency']));
-            $data['is_emergency'] = in_array($value, ['yes', 'ya', 'true', '1', 'y']);
+            $data['is_emergency'] = trim((string) $data['is_emergency']);
         } else {
-            $data['is_emergency'] = false;
+            $data['is_emergency'] = null;
         }
         
         // Parse qty - default to 0 if not set

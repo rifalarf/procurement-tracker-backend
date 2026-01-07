@@ -3,14 +3,43 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreProcurementItemRequest;
+use App\Http\Requests\UpdateProcurementItemRequest;
+use App\Http\Requests\UpdateStatusRequest;
+use App\Http\Requests\UpdateBuyerRequest;
 use App\Http\Resources\ProcurementItemResource;
 use App\Models\ActivityLog;
 use App\Models\ProcurementItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProcurementItemController extends Controller
 {
+    /**
+     * Allowed columns for sorting to prevent SQL injection
+     */
+    private const ALLOWED_SORT_COLUMNS = [
+        'id',
+        'no_pr',
+        'nama_barang',
+        'qty',
+        'nilai',
+        'created_at',
+        'updated_at',
+        'tgl_terima_dokumen',
+        'tgl_status',
+        'tgl_po',
+        'tgl_datang',
+        'status_id',
+        'department_id',
+        'buyer_id',
+        'user_requester',
+        'item_category',
+    ];
+
     /**
      * List all procurement items with filters and pagination
      */
@@ -44,21 +73,43 @@ class ProcurementItemController extends Controller
 
         // Filter for buyer visibility: show items assigned to this user OR unassigned items
         // Used by MemberDashboard to show items the buyer can claim
-        if ($forBuyer = $request->input('for_buyer')) {
-            $query->where(function ($q) use ($forBuyer) {
-                $q->where('buyer_id', $forBuyer)
-                  ->orWhereNull('buyer_id');
+        // We need to join with buyers table to check buyer.user_id matches the requesting user
+        if ($forBuyerUserId = $request->input('for_buyer')) {
+            $query->where(function ($q) use ($forBuyerUserId) {
+                $q->whereHas('buyer', function ($buyerQuery) use ($forBuyerUserId) {
+                    $buyerQuery->where('user_id', $forBuyerUserId);
+                })->orWhereNull('buyer_id');
             });
         }
 
-        // Filter by user (requester)
-        if ($user = $request->input('user_requester')) {
-            $query->where('user_requester', 'like', "%{$user}%");
+        // AVP can only see items from their assigned departments
+        $user = auth()->user();
+        if ($user && $user->role === 'avp') {
+            $departmentIds = $user->departments()->pluck('departments.id')->toArray();
+            if (!empty($departmentIds)) {
+                $query->whereIn('department_id', $departmentIds);
+            } else {
+                // If AVP has no departments assigned, show no items
+                $query->whereRaw('1 = 0');
+            }
         }
 
-        // Sorting
+        // Filter by user (requester)
+        if ($userRequester = $request->input('user_requester')) {
+            $query->where('user_requester', 'like', "%{$userRequester}%");
+        }
+
+        // Sorting - validate against whitelist to prevent SQL injection
         $sortBy = $request->input('sort_by', 'created_at');
-        $sortDir = $request->input('sort_dir', 'desc');
+        $sortDir = strtolower($request->input('sort_dir', 'desc'));
+        
+        if (!in_array($sortBy, self::ALLOWED_SORT_COLUMNS)) {
+            $sortBy = 'created_at';
+        }
+        if (!in_array($sortDir, ['asc', 'desc'])) {
+            $sortDir = 'desc';
+        }
+        
         $query->orderBy($sortBy, $sortDir);
 
         // Pagination
@@ -81,6 +132,8 @@ class ProcurementItemController extends Controller
      */
     public function show(ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('view', $procurementItem);
+        
         $procurementItem->load(['department', 'buyer', 'status']);
 
         return response()->json([
@@ -107,31 +160,11 @@ class ProcurementItemController extends Controller
     /**
      * Store a new procurement item
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreProcurementItemRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'no_pr' => 'required|string|max:50|unique:procurement_items,no_pr',
-            'mat_code' => 'nullable|string|max:50',
-            'nama_barang' => 'nullable|string|max:500',
-            'item_category' => 'nullable|string|max:100',
-            'qty' => 'integer|min:0',
-            'um' => 'nullable|string|max:50',
-            'pg' => 'nullable|string|max:50',
-            'user_requester' => 'nullable|string|max:255',
-            'nilai' => 'numeric|min:0',
-            'department_id' => 'nullable|exists:departments,id',
-            'tgl_terima_dokumen' => 'nullable|date',
-            'procx_manual' => 'in:PROCX,MANUAL',
-            'buyer_id' => 'nullable|exists:users,id',
-            'status_id' => 'nullable|exists:statuses,id',
-            'tgl_status' => 'nullable|date',
-            'emergency' => 'boolean',
-            'no_po' => 'nullable|string|max:50',
-            'nama_vendor' => 'nullable|string|max:255',
-            'tgl_po' => 'nullable|date',
-            'tgl_datang' => 'nullable|date',
-            'keterangan' => 'nullable|string',
-        ]);
+        $this->authorize('create', ProcurementItem::class);
+        
+        $validated = $request->validated();
 
         // Map frontend field names to database column names
         if (isset($validated['emergency'])) {
@@ -155,51 +188,36 @@ class ProcurementItemController extends Controller
     /**
      * Update a procurement item
      */
-    public function update(Request $request, ProcurementItem $procurementItem): JsonResponse
+    public function update(UpdateProcurementItemRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('update', $procurementItem);
+        
         $oldValues = $procurementItem->toArray();
         $user = $request->user();
+        $validated = $request->validated();
 
-        // Define allowed fields based on user role
-        if ($user->role === 'buyer') {
-            // Buyers can only update status_id, pg, and keterangan
-            $validated = $request->validate([
-                'status_id' => 'nullable|exists:statuses,id',
-                'pg' => 'nullable|string|max:50',
-                'keterangan' => 'nullable|string',
-            ]);
-
-            // Automatically update tgl_status when status changes
+        // For buyers and staff, automatically update tgl_status when status changes
+        if (in_array($user->role, ['buyer', 'staff'])) {
+            // Map emergency field for buyer/staff
+            if (isset($validated['emergency'])) {
+                $validated['is_emergency'] = $validated['emergency'];
+                unset($validated['emergency']);
+            }
+            
+            if (isset($validated['status_id']) && $validated['status_id'] != $procurementItem->status_id) {
+                $validated['tgl_status'] = now();
+            }
+        } elseif ($user->role === 'avp') {
+            // AVP can only update pg, status_id, and keterangan
+            $allowedFields = ['pg', 'status_id', 'keterangan'];
+            $validated = array_intersect_key($validated, array_flip($allowedFields));
+            
+            // Auto-update tgl_status when status changes
             if (isset($validated['status_id']) && $validated['status_id'] != $procurementItem->status_id) {
                 $validated['tgl_status'] = now();
             }
         } else {
-            // Admins can update all fields
-            $validated = $request->validate([
-                'no_pr' => 'sometimes|string|max:50|unique:procurement_items,no_pr,' . $procurementItem->id,
-                'mat_code' => 'nullable|string|max:50',
-                'nama_barang' => 'nullable|string|max:500',
-                'item_category' => 'nullable|string|max:100',
-                'qty' => 'sometimes|integer|min:0',
-                'um' => 'nullable|string|max:50',
-                'pg' => 'nullable|string|max:50',
-                'user_requester' => 'nullable|string|max:255',
-                'nilai' => 'nullable|numeric|min:0',
-                'department_id' => 'nullable|exists:departments,id',
-                'tgl_terima_dokumen' => 'nullable|date',
-                'procx_manual' => 'nullable|in:PROCX,MANUAL',
-                'buyer_id' => 'nullable|exists:users,id',
-                'status_id' => 'nullable|exists:statuses,id',
-                'tgl_status' => 'nullable|date',
-                'emergency' => 'boolean',
-                'no_po' => 'nullable|string|max:50',
-                'nama_vendor' => 'nullable|string|max:255',
-                'tgl_po' => 'nullable|date',
-                'tgl_datang' => 'nullable|date',
-                'keterangan' => 'nullable|string',
-            ]);
-
-            // Map frontend field names to database column names
+            // Admin - Map frontend field names to database column names
             if (isset($validated['emergency'])) {
                 $validated['is_emergency'] = $validated['emergency'];
                 unset($validated['emergency']);
@@ -222,13 +240,13 @@ class ProcurementItemController extends Controller
     /**
      * Update only the status of a procurement item
      */
-    public function updateStatus(Request $request, ProcurementItem $procurementItem): JsonResponse
+    public function updateStatus(UpdateStatusRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('update', $procurementItem);
+        
         $oldValues = ['status_id' => $procurementItem->status_id];
 
-        $validated = $request->validate([
-            'status_id' => 'nullable|exists:statuses,id',
-        ]);
+        $validated = $request->validated();
 
         // If status is being set, update the date; if cleared, remove the date
         if ($validated['status_id'] !== null) {
@@ -253,13 +271,13 @@ class ProcurementItemController extends Controller
     /**
      * Update only the buyer of a procurement item
      */
-    public function updateBuyer(Request $request, ProcurementItem $procurementItem): JsonResponse
+    public function updateBuyer(UpdateBuyerRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
+        $this->authorize('assignBuyer', $procurementItem);
+        
         $oldValues = ['buyer_id' => $procurementItem->buyer_id];
 
-        $validated = $request->validate([
-            'buyer_id' => 'nullable|exists:users,id',
-        ]);
+        $validated = $request->validated();
 
         $validated['updated_by'] = $request->user()->id;
 
@@ -414,7 +432,7 @@ class ProcurementItemController extends Controller
         }
 
         if ($field === 'is_emergency') {
-            return $value ? 'Ya' : 'Tidak';
+            return $value ?: '-';
         }
 
         // Format currency
@@ -424,5 +442,141 @@ class ProcurementItemController extends Controller
 
         return (string) $value;
     }
-}
 
+    /**
+     * Export procurement items to Excel
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $query = ProcurementItem::with(['department', 'buyer', 'status']);
+
+        // Apply same filters as index()
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('no_pr', 'like', "%{$search}%")
+                  ->orWhere('nama_barang', 'like', "%{$search}%")
+                  ->orWhere('user_requester', 'like', "%{$search}%");
+            });
+        }
+
+        if ($statusId = $request->input('status_id')) {
+            $query->where('status_id', $statusId);
+        }
+
+        if ($departmentId = $request->input('department_id')) {
+            $query->where('department_id', $departmentId);
+        }
+
+        if ($buyerId = $request->input('buyer_id')) {
+            $query->where('buyer_id', $buyerId);
+        }
+
+        if ($user = $request->input('user_requester')) {
+            $query->where('user_requester', 'like', "%{$user}%");
+        }
+
+        // Filter for buyer visibility: show items assigned to this user OR unassigned items
+        if ($forBuyerUserId = $request->input('for_buyer')) {
+            $query->where(function ($q) use ($forBuyerUserId) {
+                $q->whereHas('buyer', function ($buyerQuery) use ($forBuyerUserId) {
+                    $buyerQuery->where('user_id', $forBuyerUserId);
+                })->orWhereNull('buyer_id');
+            });
+        }
+
+        // Get all items (no pagination for export)
+        $items = $query->orderBy('created_at', 'desc')->get();
+
+        // Create spreadsheet
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Define headers (21 columns as specified)
+        $headers = [
+            'No PR',
+            'Mat Code',
+            'Nama Barang',
+            'Qty',
+            'UM',
+            'PG',
+            'Item Category',
+            'User',
+            'Nilai',
+            'Bagian',
+            'Tanggal Terima Dokumen',
+            'PROCX/MANUAL',
+            'Buyer',
+            'Status',
+            'Tanggal Status',
+            'EMERGENCY',
+            'NO PO',
+            'Nama Vendor',
+            'Tanggal PO',
+            'Tanggal Datang',
+            'Keterangan',
+        ];
+
+        // Write headers
+        $sheet->fromArray($headers, null, 'A1');
+
+        // Style header row
+        $headerStyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '4F46E5'],
+            ],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+            ],
+        ];
+        $sheet->getStyle('A1:U1')->applyFromArray($headerStyle);
+
+        // Write data rows
+        $row = 2;
+        foreach ($items as $item) {
+            $sheet->setCellValue('A' . $row, $item->no_pr);
+            $sheet->setCellValue('B' . $row, $item->mat_code);
+            $sheet->setCellValue('C' . $row, $item->nama_barang);
+            $sheet->setCellValue('D' . $row, $item->qty);
+            $sheet->setCellValue('E' . $row, $item->um);
+            $sheet->setCellValue('F' . $row, $item->pg);
+            $sheet->setCellValue('G' . $row, $item->item_category);
+            $sheet->setCellValue('H' . $row, $item->user_requester);
+            $sheet->setCellValue('I' . $row, $item->nilai);
+            $sheet->setCellValue('J' . $row, $item->department?->name);
+            $sheet->setCellValue('K' . $row, $item->tgl_terima_dokumen?->format('d/m/Y'));
+            $sheet->setCellValue('L' . $row, $item->procx_manual);
+            $sheet->setCellValue('M' . $row, $item->buyer?->name);
+            $sheet->setCellValue('N' . $row, $item->status?->name);
+            $sheet->setCellValue('O' . $row, $item->tgl_status?->format('d/m/Y'));
+            $sheet->setCellValue('P' . $row, $item->is_emergency ?: '-');
+            $sheet->setCellValue('Q' . $row, $item->no_po);
+            $sheet->setCellValue('R' . $row, $item->nama_vendor);
+            $sheet->setCellValue('S' . $row, $item->tgl_po?->format('d/m/Y'));
+            $sheet->setCellValue('T' . $row, $item->tgl_datang?->format('d/m/Y'));
+            $sheet->setCellValue('U' . $row, $item->keterangan);
+            $row++;
+        }
+
+        // Format Nilai column as number
+        $sheet->getStyle('I2:I' . ($row - 1))->getNumberFormat()
+            ->setFormatCode('#,##0');
+
+        // Auto-size columns
+        foreach (range('A', 'U') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        // Generate filename with timestamp
+        $filename = 'procurement_export_' . date('Ymd_His') . '.xlsx';
+
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+}
