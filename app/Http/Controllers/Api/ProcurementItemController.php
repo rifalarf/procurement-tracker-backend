@@ -71,14 +71,26 @@ class ProcurementItemController extends Controller
             $query->where('buyer_id', $buyerId);
         }
 
-        // Filter for buyer visibility: show items assigned to this user OR unassigned items
-        // Used by MemberDashboard to show items the buyer can claim
-        // We need to join with buyers table to check buyer.user_id matches the requesting user
+        // Filter for buyer visibility: show items assigned to this user OR unassigned items from their departments
+        // Used by BuyerDashboard to show items the buyer can claim
         if ($forBuyerUserId = $request->input('for_buyer')) {
-            $query->where(function ($q) use ($forBuyerUserId) {
+            // Get user's assigned department IDs
+            $buyerUser = \App\Models\User::find($forBuyerUserId);
+            $buyerDepartmentIds = $buyerUser ? $buyerUser->departments()->pluck('departments.id')->toArray() : [];
+            
+            $query->where(function ($q) use ($forBuyerUserId, $buyerDepartmentIds) {
+                // Items assigned to this buyer
                 $q->whereHas('buyer', function ($buyerQuery) use ($forBuyerUserId) {
                     $buyerQuery->where('user_id', $forBuyerUserId);
-                })->orWhereNull('buyer_id');
+                });
+                
+                // OR unassigned items from buyer's departments
+                if (!empty($buyerDepartmentIds)) {
+                    $q->orWhere(function ($subQ) use ($buyerDepartmentIds) {
+                        $subQ->whereNull('buyer_id')
+                             ->whereIn('department_id', $buyerDepartmentIds);
+                    });
+                }
             });
         }
 
@@ -475,12 +487,25 @@ class ProcurementItemController extends Controller
             $query->where('user_requester', 'like', "%{$user}%");
         }
 
-        // Filter for buyer visibility: show items assigned to this user OR unassigned items
+        // Filter for buyer visibility: show items assigned to this user OR unassigned items from their departments
         if ($forBuyerUserId = $request->input('for_buyer')) {
-            $query->where(function ($q) use ($forBuyerUserId) {
+            // Get user's assigned department IDs
+            $buyerUser = \App\Models\User::find($forBuyerUserId);
+            $buyerDepartmentIds = $buyerUser ? $buyerUser->departments()->pluck('departments.id')->toArray() : [];
+            
+            $query->where(function ($q) use ($forBuyerUserId, $buyerDepartmentIds) {
+                // Items assigned to this buyer
                 $q->whereHas('buyer', function ($buyerQuery) use ($forBuyerUserId) {
                     $buyerQuery->where('user_id', $forBuyerUserId);
-                })->orWhereNull('buyer_id');
+                });
+                
+                // OR unassigned items from buyer's departments
+                if (!empty($buyerDepartmentIds)) {
+                    $q->orWhere(function ($subQ) use ($buyerDepartmentIds) {
+                        $subQ->whereNull('buyer_id')
+                             ->whereIn('department_id', $buyerDepartmentIds);
+                    });
+                }
             });
         }
 

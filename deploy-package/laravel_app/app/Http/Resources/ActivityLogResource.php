@@ -22,7 +22,7 @@ class ActivityLogResource extends JsonResource
                 return $this->procurementItem ? [
                     'id' => $this->procurementItem->id,
                     'no_pr' => $this->procurementItem->no_pr,
-                    'nama_material' => $this->procurementItem->nama_material,
+                    'nama_barang' => $this->procurementItem->nama_barang,
                     'user_requester' => $this->procurementItem->user_requester,
                 ] : null;
             }),

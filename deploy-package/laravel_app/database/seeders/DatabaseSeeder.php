@@ -16,10 +16,10 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             DepartmentSeeder::class,
-            BuyerSeeder::class,
             StatusSeeder::class,
             AdminUserSeeder::class,
-            BuyerUserSeeder::class,
+            // Note: BuyerSeeder and BuyerUserSeeder removed
+            // Users should be imported via Admin Dashboard after deployment
         ]);
     }
 }

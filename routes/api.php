@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ProcurementItemController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StatusController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserImportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -86,6 +87,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/session/{id}/preview', [ImportController::class, 'preview']);
         Route::post('/session/{id}/execute', [ImportController::class, 'execute']);
         Route::get('/template', [ImportController::class, 'downloadTemplate']);
+    });
+
+    // Import Users (admin only)
+    Route::middleware('role:admin')->prefix('import-users')->group(function () {
+        Route::post('/upload', [UserImportController::class, 'uploadUsers']);
+        Route::get('/session/{id}', [UserImportController::class, 'getSession']);
+        Route::put('/session/{id}/mapping', [UserImportController::class, 'updateMapping']);
+        Route::get('/session/{id}/preview', [UserImportController::class, 'preview']);
+        Route::post('/session/{id}/execute', [UserImportController::class, 'execute']);
+        Route::get('/template', [UserImportController::class, 'downloadTemplate']);
     });
 
     // Activity Logs

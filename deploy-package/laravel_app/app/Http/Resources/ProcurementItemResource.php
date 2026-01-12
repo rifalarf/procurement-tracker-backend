@@ -24,10 +24,10 @@ class ProcurementItemResource extends JsonResource
             'buyer_id' => $this->buyer_id,
             'status_id' => $this->status_id,
             'department' => $this->whenLoaded('department', function () {
-                return [
+                return $this->department ? [
                     'id' => $this->department->id,
                     'name' => $this->department->name,
-                ];
+                ] : null;
             }),
             'tgl_terima_dokumen' => $this->tgl_terima_dokumen?->format('Y-m-d'),
             'procx_manual' => $this->procx_manual,

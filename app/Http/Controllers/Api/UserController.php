@@ -38,8 +38,8 @@ class UserController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        // Pagination
-        $perPage = min($request->input('per_page', 20), 100);
+        // Pagination - default to 100 for user management
+        $perPage = min($request->input('per_page', 100), 200);
         $users = $query->orderBy('name')->paginate($perPage);
 
         return response()->json([
@@ -189,6 +189,11 @@ class UserController extends Controller
             ], 422);
         }
 
+        // Delete associated buyer record if exists
+        if ($user->buyer) {
+            $user->buyer->delete();
+        }
+        
         $user->departments()->detach();
         $user->tokens()->delete();
         $user->delete();
