@@ -32,6 +32,7 @@ class ProcurementItem extends Model
         'tgl_po',
         'tgl_datang',
         'keterangan',
+        'version',
         'created_by',
         'updated_by',
     ];

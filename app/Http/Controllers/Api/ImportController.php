@@ -72,7 +72,7 @@ class ImportController extends Controller
             // Read Excel file
             $spreadsheet = IOFactory::load(Storage::disk('local')->path($path));
             $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
+            $rows = $this->worksheetToRawArray($worksheet);
             
             if (empty($rows)) {
                 Storage::disk('local')->delete($path);
@@ -174,7 +174,7 @@ class ImportController extends Controller
         try {
             $spreadsheet = IOFactory::load($filePath);
             $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
+            $rows = $this->worksheetToRawArray($worksheet);
             
             $headers = array_map('trim', $rows[0]);
             $mappings = $session->mappings->keyBy('excel_column');
@@ -253,7 +253,7 @@ class ImportController extends Controller
             
             $spreadsheet = IOFactory::load($filePath);
             $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
+            $rows = $this->worksheetToRawArray($worksheet);
             
             $headers = array_map('trim', $rows[0]);
             $mappings = $session->mappings->keyBy('excel_column');
@@ -268,6 +268,7 @@ class ImportController extends Controller
             $skippedCount = 0;
             $updatedCount = 0;
             $errors = [];
+            $importLog = [];
             
             DB::beginTransaction();
             
@@ -304,25 +305,73 @@ class ImportController extends Controller
                     // Add metadata
                     $rowData['created_by'] = auth()->id();
                     
-                    // Use updateOrCreate to handle duplicates
-                    // If no_pr exists, update the record; otherwise, create new
                     $noPr = $rowData['no_pr'];
-                    unset($rowData['no_pr']); // Remove from data array, will be used as key
                     
-                    $existing = ProcurementItem::where('no_pr', $noPr)->first();
+                    // Check for exact duplicate (all important fields match including status)
+                    $existingExact = ProcurementItem::where('no_pr', $noPr)
+                        ->where('mat_code', $rowData['mat_code'] ?? null)
+                        ->where('nama_barang', $rowData['nama_barang'] ?? null)
+                        ->where('qty', $rowData['qty'] ?? 0)
+                        ->where('nilai', $rowData['nilai'] ?? 0)
+                        ->where('department_id', $rowData['department_id'] ?? null)
+                        ->where('status_id', $rowData['status_id'] ?? null)
+                        ->first();
                     
-                    if ($existing) {
-                        $existing->update($rowData);
-                        $updatedCount++;
+                    if ($existingExact) {
+                        // Exact duplicate found - skip
+                        $skippedCount++;
+                        $importLog[] = [
+                            'row' => $i,
+                            'action' => 'SKIP',
+                            'no_pr' => $noPr,
+                            'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
+                            'reason' => 'Exact duplicate found (id: ' . $existingExact->id . ')',
+                        ];
+                        continue;
+                    }
+                    
+                    // Check for same item (No PR + Mat Code + Nama Barang) to determine version
+                    // Different items under same No PR should each have their own version sequence
+                    $maxVersion = ProcurementItem::where('no_pr', $noPr)
+                        ->where('mat_code', $rowData['mat_code'] ?? null)
+                        ->where('nama_barang', $rowData['nama_barang'] ?? null)
+                        ->max('version') ?? 0;
+                    
+                    // Create new record with appropriate version
+                    $rowData['version'] = $maxVersion + 1;
+                    $newItem = ProcurementItem::create($rowData);
+                    
+                    if ($maxVersion > 0) {
+                        $updatedCount++; // Count as "updated" because it's a new version of existing No PR
+                        $importLog[] = [
+                            'row' => $i,
+                            'action' => 'UPDATE',
+                            'no_pr' => $noPr,
+                            'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
+                            'version' => $rowData['version'],
+                            'new_id' => $newItem->id,
+                        ];
                     } else {
-                        $rowData['no_pr'] = $noPr;
-                        ProcurementItem::create($rowData);
-                        $successCount++;
+                        $successCount++; // Count as "new" because No PR is new
+                        $importLog[] = [
+                            'row' => $i,
+                            'action' => 'NEW',
+                            'no_pr' => $noPr,
+                            'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
+                            'version' => 1,
+                            'new_id' => $newItem->id,
+                        ];
                     }
                     
                 } catch (\Exception $e) {
                     $errorCount++;
                     $errors[] = "Row $i: " . $e->getMessage();
+                    $importLog[] = [
+                        'row' => $i,
+                        'action' => 'ERROR',
+                        'no_pr' => $rowData['no_pr'] ?? 'N/A',
+                        'error' => $e->getMessage(),
+                    ];
                 }
             }
             
@@ -339,6 +388,25 @@ class ImportController extends Controller
             // Clean up file
             Storage::disk('local')->delete('imports/' . $session->filename);
             
+            // Log to file for debugging
+            $logContent = "=== IMPORT LOG ===" . PHP_EOL;
+            $logContent .= "Session ID: {$session->id}" . PHP_EOL;
+            $logContent .= "Timestamp: " . now()->format('Y-m-d H:i:s') . PHP_EOL;
+            $logContent .= "Results: New={$successCount}, Updated={$updatedCount}, Skipped={$skippedCount}, Errors={$errorCount}" . PHP_EOL;
+            $logContent .= PHP_EOL . "=== DETAIL ===" . PHP_EOL;
+            foreach ($importLog as $log) {
+                $logContent .= "[Row {$log['row']}] {$log['action']}";
+                $logContent .= " | No PR: {$log['no_pr']}";
+                if (isset($log['nama_barang'])) $logContent .= " | Item: {$log['nama_barang']}";
+                if (isset($log['version'])) $logContent .= " | Version: {$log['version']}";
+                if (isset($log['new_id'])) $logContent .= " | ID: {$log['new_id']}";
+                if (isset($log['reason'])) $logContent .= " | Reason: {$log['reason']}";
+                if (isset($log['error'])) $logContent .= " | Error: {$log['error']}";
+                $logContent .= PHP_EOL;
+            }
+            
+            Storage::disk('local')->put('import_logs/import_' . $session->id . '.log', $logContent);
+            
             return response()->json([
                 'message' => 'Import completed',
                 'success_count' => $successCount,
@@ -346,6 +414,7 @@ class ImportController extends Controller
                 'error_count' => $errorCount,
                 'skipped_count' => $skippedCount,
                 'errors' => array_slice($errors, 0, 10), // Return first 10 errors
+                'log' => $importLog, // Include log in response
             ]);
             
         } catch (\Exception $e) {
@@ -695,5 +764,37 @@ class ImportController extends Controller
         }
         
         return $data;
+    }
+
+    /**
+     * Read worksheet to array with raw values (not formatted)
+     * This prevents Excel time format from corrupting No PR values
+     */
+    private function worksheetToRawArray($worksheet): array
+    {
+        $highestRow = $worksheet->getHighestRow();
+        $highestColumnLetter = $worksheet->getHighestColumn();
+        $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumnLetter);
+        
+        $rows = [];
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $rowData = [];
+            for ($colIndex = 1; $colIndex <= $highestColumnIndex; $colIndex++) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+                $cell = $worksheet->getCell($colLetter . $row);
+                $value = $cell->getValue();
+                
+                // Convert numeric values to string (especially for No PR which might be formatted as time)
+                if (is_numeric($value)) {
+                    // This handles cases where Excel formats the number as time
+                    $value = (string) intval($value);
+                }
+                
+                $rowData[] = $value;
+            }
+            $rows[] = $rowData;
+        }
+        
+        return $rows;
     }
 }

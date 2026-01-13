@@ -12,6 +12,7 @@ class ProcurementItemResource extends JsonResource
         return [
             'id' => $this->id,
             'no_pr' => $this->no_pr,
+            'version' => $this->version ?? 1,
             'mat_code' => $this->mat_code,
             'nama_barang' => $this->nama_barang,
             'item_category' => $this->item_category,

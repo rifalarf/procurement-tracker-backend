@@ -17,9 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             DepartmentSeeder::class,
             StatusSeeder::class,
-            AdminUserSeeder::class,
-            // Note: BuyerSeeder and BuyerUserSeeder removed
-            // Users should be imported via Admin Dashboard after deployment
+            UserSeeder::class,
         ]);
     }
 }

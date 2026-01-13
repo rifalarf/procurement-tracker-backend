@@ -56,13 +56,13 @@ rsync -av --progress \
 # Create production .env file
 echo -e "${YELLOW}[3/9] Creating production .env file...${NC}"
 cat > "${APP_DIR}/.env" << 'ENVFILE'
-APP_NAME="Procurement Tracker"
+APP_NAME="Procurement Status"
 APP_ENV=production
 APP_KEY=base64:tLhVfQp/ZqL2VhVUYDNdz6Moh7K9d/Q1nv0qLu4XBSY=
 APP_DEBUG=false
 APP_URL=https://pengadaan.matrifix.site
 
-FRONTEND_URL=https://proctrack.vercel.app
+FRONTEND_URL=https://procurehub.vercel.app
 
 APP_LOCALE=en
 APP_FALLBACK_LOCALE=en
@@ -85,7 +85,7 @@ DB_USERNAME=matf2269_pengadaan
 DB_PASSWORD="aiG$a&g3-Y4(_aa3"
 
 SESSION_DRIVER=database
-SESSION_LIFETIME=120
+SESSION_LIFETIME=10080
 SESSION_ENCRYPT=false
 SESSION_PATH=/
 SESSION_DOMAIN=.matrifix.site
@@ -342,7 +342,7 @@ if ($action) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deploy Admin - Procurement Tracker</title>
+    <title>Deploy Admin - Procurement Status</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; padding: 20px; color: #fff; }
@@ -450,7 +450,7 @@ echo -e "   ${GREEN}✓ public_html.zip created${NC}"
 echo -e "${YELLOW}[9/9] Creating deployment info...${NC}"
 cat > "${DEPLOY_DIR}/DEPLOY_INFO.txt" << DEPLOYINFO
 ============================================
- Deployment Package - Procurement Tracker
+ Deployment Package - Procurement Status
  Created: $(date +"%Y-%m-%d %H:%M:%S")
 ============================================
 
@@ -490,7 +490,7 @@ cat > "${DEPLOY_DIR}/DEPLOY_INFO.txt" << DEPLOYINFO
 
 🔗 URLS:
 - Backend: https://pengadaan.matrifix.site/api
-- Frontend: https://proctrack.vercel.app
+- Frontend: https://procurehub.vercel.app
 - Admin Panel: https://pengadaan.matrifix.site/deploy-admin.php?key=deploy-pengadaan-2024-secure
 
 ============================================
