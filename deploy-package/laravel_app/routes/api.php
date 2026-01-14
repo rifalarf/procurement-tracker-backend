@@ -18,6 +18,25 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
+// Health check endpoint (public)
+Route::get('/health', function () {
+    try {
+        // Check database connection
+        \DB::connection()->getPdo();
+        $dbStatus = 'connected';
+    } catch (\Exception $e) {
+        $dbStatus = 'disconnected';
+    }
+
+    return response()->json([
+        'status' => 'ok',
+        'app' => config('app.name'),
+        'environment' => config('app.env'),
+        'database' => $dbStatus,
+        'timestamp' => now()->toIso8601String(),
+    ]);
+});
+
 // Public auth routes
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);

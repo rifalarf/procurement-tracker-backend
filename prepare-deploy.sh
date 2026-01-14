@@ -62,7 +62,7 @@ APP_KEY=base64:tLhVfQp/ZqL2VhVUYDNdz6Moh7K9d/Q1nv0qLu4XBSY=
 APP_DEBUG=false
 APP_URL=https://pengadaan.matrifix.site
 
-FRONTEND_URL=https://procurehub.vercel.app
+FRONTEND_URL=https://procurehub-kujang.vercel.app
 
 APP_LOCALE=en
 APP_FALLBACK_LOCALE=en
@@ -490,7 +490,7 @@ cat > "${DEPLOY_DIR}/DEPLOY_INFO.txt" << DEPLOYINFO
 
 🔗 URLS:
 - Backend: https://pengadaan.matrifix.site/api
-- Frontend: https://procurehub.vercel.app
+- Frontend: https://procurehub-kujang.vercel.app
 - Admin Panel: https://pengadaan.matrifix.site/deploy-admin.php?key=deploy-pengadaan-2024-secure
 
 ============================================
