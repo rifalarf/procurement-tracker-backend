@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Buyer;
 use App\Models\Department;
 use App\Models\ImportMapping;
@@ -305,10 +306,17 @@ class ImportController extends Controller
                     // Add metadata
                     $rowData['created_by'] = auth()->id();
                     
-                    $noPr = $rowData['no_pr'];
+                    $originalNoPr = $rowData['no_pr'];
+                    
+                    // Extract base no_pr (without version suffix) if it already has one
+                    $baseNoPr = preg_replace('/_\d+$/', '', $originalNoPr);
                     
                     // Check for exact duplicate (all important fields match including status)
-                    $existingExact = ProcurementItem::where('no_pr', $noPr)
+                    // Search for any version of this base no_pr
+                    $existingExact = ProcurementItem::where(function($query) use ($baseNoPr) {
+                            $query->where('no_pr', $baseNoPr)
+                                  ->orWhere('no_pr', 'LIKE', $baseNoPr . '_%');
+                        })
                         ->where('mat_code', $rowData['mat_code'] ?? null)
                         ->where('nama_barang', $rowData['nama_barang'] ?? null)
                         ->where('qty', $rowData['qty'] ?? 0)
@@ -323,40 +331,65 @@ class ImportController extends Controller
                         $importLog[] = [
                             'row' => $i,
                             'action' => 'SKIP',
-                            'no_pr' => $noPr,
+                            'no_pr' => $originalNoPr,
                             'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
                             'reason' => 'Exact duplicate found (id: ' . $existingExact->id . ')',
                         ];
                         continue;
                     }
                     
-                    // Check for same item (No PR + Mat Code + Nama Barang) to determine version
-                    // Different items under same No PR should each have their own version sequence
-                    $maxVersion = ProcurementItem::where('no_pr', $noPr)
-                        ->where('mat_code', $rowData['mat_code'] ?? null)
-                        ->where('nama_barang', $rowData['nama_barang'] ?? null)
-                        ->max('version') ?? 0;
+                    // Count existing records with this base no_pr (including versioned ones)
+                    $existingCount = ProcurementItem::where(function($query) use ($baseNoPr) {
+                            $query->where('no_pr', $baseNoPr)
+                                  ->orWhere('no_pr', 'LIKE', $baseNoPr . '_%');
+                        })->count();
                     
-                    // Create new record with appropriate version
-                    $rowData['version'] = $maxVersion + 1;
-                    $newItem = ProcurementItem::create($rowData);
-                    
-                    if ($maxVersion > 0) {
-                        $updatedCount++; // Count as "updated" because it's a new version of existing No PR
+                    // Determine the no_pr value with version suffix
+                    if ($existingCount > 0) {
+                        // Find the max version number
+                        $maxVersionNum = 1;
+                        $existingNoPrs = ProcurementItem::where(function($query) use ($baseNoPr) {
+                                $query->where('no_pr', $baseNoPr)
+                                      ->orWhere('no_pr', 'LIKE', $baseNoPr . '_%');
+                            })
+                            ->pluck('no_pr')
+                            ->toArray();
+                        
+                        foreach ($existingNoPrs as $existingNoPr) {
+                            if ($existingNoPr === $baseNoPr) {
+                                // Base version counts as version 1
+                                $maxVersionNum = max($maxVersionNum, 1);
+                            } elseif (preg_match('/_(\d+)$/', $existingNoPr, $matches)) {
+                                $maxVersionNum = max($maxVersionNum, (int)$matches[1]);
+                            }
+                        }
+                        
+                        // New version is max + 1
+                        $newVersion = $maxVersionNum + 1;
+                        $rowData['no_pr'] = $baseNoPr . '_' . $newVersion;
+                        $rowData['version'] = $newVersion;
+                        
+                        $updatedCount++;
+                        $newItem = ProcurementItem::create($rowData);
                         $importLog[] = [
                             'row' => $i,
                             'action' => 'UPDATE',
-                            'no_pr' => $noPr,
+                            'no_pr' => $rowData['no_pr'],
                             'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
-                            'version' => $rowData['version'],
+                            'version' => $newVersion,
                             'new_id' => $newItem->id,
                         ];
                     } else {
-                        $successCount++; // Count as "new" because No PR is new
+                        // First occurrence - use base no_pr without suffix
+                        $rowData['no_pr'] = $baseNoPr;
+                        $rowData['version'] = 1;
+                        
+                        $successCount++;
+                        $newItem = ProcurementItem::create($rowData);
                         $importLog[] = [
                             'row' => $i,
                             'action' => 'NEW',
-                            'no_pr' => $noPr,
+                            'no_pr' => $baseNoPr,
                             'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
                             'version' => 1,
                             'new_id' => $newItem->id,
@@ -383,6 +416,25 @@ class ImportController extends Controller
                 'processed_rows' => $successCount + $updatedCount + $errorCount + $skippedCount,
                 'success_rows' => $successCount + $updatedCount,
                 'error_rows' => $errorCount,
+            ]);
+            
+            // Log activity
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'procurement_item_id' => null,
+                'event_type' => 'imported',
+                'description' => "Imported procurement data from '{$session->original_filename}': {$successCount} new, {$updatedCount} updated, {$skippedCount} skipped, {$errorCount} errors",
+                'old_values' => null,
+                'new_values' => [
+                    'filename' => $session->original_filename,
+                    'success_count' => $successCount,
+                    'updated_count' => $updatedCount,
+                    'skipped_count' => $skippedCount,
+                    'error_count' => $errorCount,
+                    'total_rows' => $session->total_rows,
+                ],
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
             ]);
             
             // Clean up file
