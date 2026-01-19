@@ -22,10 +22,13 @@ class ActivityLogController extends Controller
             ->orderBy('created_at', 'desc');
 
         // AVP can only see logs from items in their assigned departments
+        // BUT also include 'imported' logs (visible to everyone)
         if ($user->role === 'avp') {
             $departmentIds = $user->departments()->pluck('departments.id')->toArray();
-            $query->whereHas('procurementItem', function ($q) use ($departmentIds) {
-                $q->whereIn('department_id', $departmentIds);
+            $query->where(function ($q) use ($departmentIds) {
+                $q->whereHas('procurementItem', function ($subQ) use ($departmentIds) {
+                    $subQ->whereIn('department_id', $departmentIds);
+                })->orWhere('event_type', 'imported');
             });
         }
 
@@ -66,9 +69,12 @@ class ActivityLogController extends Controller
             ->orderBy('created_at', 'desc');
 
         // Buyer and Staff see logs for all items in their departments
+        // BUT also include 'imported' logs (visible to everyone)
         $departmentIds = $user->departments()->pluck('departments.id')->toArray();
-        $query->whereHas('procurementItem', function ($q) use ($departmentIds) {
-            $q->whereIn('department_id', $departmentIds);
+        $query->where(function ($q) use ($departmentIds) {
+            $q->whereHas('procurementItem', function ($subQ) use ($departmentIds) {
+                $subQ->whereIn('department_id', $departmentIds);
+            })->orWhere('event_type', 'imported');
         });
 
         // Pagination

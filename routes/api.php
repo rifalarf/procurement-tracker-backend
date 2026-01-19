@@ -119,7 +119,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Activity Logs
-    Route::middleware('role:admin,avp')->group(function () {
+    Route::middleware('role:admin,avp,staff')->group(function () {
         Route::get('/activity-logs', [ActivityLogController::class, 'index']);
     });
     Route::get('/activity-logs/my', [ActivityLogController::class, 'myLogs']);
@@ -128,6 +128,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // Settings (admin only)
     Route::middleware('role:admin')->prefix('settings')->group(function () {
         Route::delete('/purge-data', [SettingsController::class, 'purgeData']);
+    });
+
+    // Field Permissions (admin only)
+    Route::middleware('role:admin')->prefix('field-permissions')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\FieldPermissionController::class, 'index']);
+        Route::get('/fields', [\App\Http\Controllers\Api\FieldPermissionController::class, 'fields']);
+        Route::put('/{permission}', [\App\Http\Controllers\Api\FieldPermissionController::class, 'update']);
+        Route::post('/bulk-update', [\App\Http\Controllers\Api\FieldPermissionController::class, 'bulkUpdate']);
+        Route::post('/reset', [\App\Http\Controllers\Api\FieldPermissionController::class, 'reset']);
     });
 });
 
