@@ -9,6 +9,8 @@ use App\Http\Requests\UpdateStatusRequest;
 use App\Http\Requests\UpdateBuyerRequest;
 use App\Http\Resources\ProcurementItemResource;
 use App\Models\ActivityLog;
+use App\Models\CustomFieldConfig;
+use App\Models\FieldPermission;
 use App\Models\ProcurementItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,13 +56,22 @@ class ProcurementItemController extends Controller
             // Define allowed search fields to prevent SQL injection
             $allowedFields = ['no_pr', 'mat_code', 'nama_barang', 'user_requester'];
             
+            // Add searchable custom fields
+            $searchableCustomFields = CustomFieldConfig::getSearchableFieldNames();
+            $allowedFields = array_merge($allowedFields, $searchableCustomFields);
+            
             if ($searchField === 'all' || !in_array($searchField, $allowedFields)) {
                 // Search across all fields (default behavior)
-                $query->where(function ($q) use ($search) {
+                $query->where(function ($q) use ($search, $searchableCustomFields) {
                     $q->where('no_pr', 'like', "%{$search}%")
                       ->orWhere('mat_code', 'like', "%{$search}%")
                       ->orWhere('nama_barang', 'like', "%{$search}%")
                       ->orWhere('user_requester', 'like', "%{$search}%");
+                    
+                    // Also search in searchable custom fields
+                    foreach ($searchableCustomFields as $customField) {
+                        $q->orWhere($customField, 'like', "%{$search}%");
+                    }
                 });
             } else {
                 // Search in specific field only
@@ -219,8 +230,8 @@ class ProcurementItemController extends Controller
                 $validated['tgl_status'] = now();
             }
         } elseif ($user->role === 'avp') {
-            // AVP can only update pg, status_id, and keterangan
-            $allowedFields = ['pg', 'status_id', 'keterangan'];
+            // AVP can only update fields they have permission to edit (from field_permissions table)
+            $allowedFields = FieldPermission::getEditableFields('avp');
             $validated = array_intersect_key($validated, array_flip($allowedFields));
             
             // Auto-update tgl_status when status changes
@@ -499,11 +510,14 @@ class ProcurementItemController extends Controller
         // Get all items (no pagination for export)
         $items = $query->orderBy('created_at', 'desc')->get();
 
+        // Get active custom fields
+        $activeCustomFields = CustomFieldConfig::active()->get();
+
         // Create spreadsheet
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Define headers (21 columns as specified)
+        // Define headers (21 base columns + active custom fields)
         $headers = [
             'No PR',
             'Mat Code',
@@ -528,8 +542,17 @@ class ProcurementItemController extends Controller
             'Keterangan',
         ];
 
+        // Add active custom field headers
+        foreach ($activeCustomFields as $config) {
+            $headers[] = $config->label ?? ucfirst(str_replace('_', ' ', $config->field_name));
+        }
+
         // Write headers
         $sheet->fromArray($headers, null, 'A1');
+
+        // Calculate last column letter
+        $lastColIndex = count($headers);
+        $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColIndex);
 
         // Style header row
         $headerStyle = [
@@ -542,7 +565,7 @@ class ProcurementItemController extends Controller
                 'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
             ],
         ];
-        $sheet->getStyle('A1:U1')->applyFromArray($headerStyle);
+        $sheet->getStyle("A1:{$lastColLetter}1")->applyFromArray($headerStyle);
 
         // Write data rows
         $row = 2;
@@ -568,6 +591,16 @@ class ProcurementItemController extends Controller
             $sheet->setCellValue('S' . $row, $item->tgl_po?->format('d/m/Y'));
             $sheet->setCellValue('T' . $row, $item->tgl_datang?->format('d/m/Y'));
             $sheet->setCellValue('U' . $row, $item->keterangan);
+            
+            // Add custom field values
+            $colIndex = 22; // V is column 22
+            foreach ($activeCustomFields as $config) {
+                $fieldName = $config->field_name;
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+                $sheet->setCellValue($colLetter . $row, $item->$fieldName);
+                $colIndex++;
+            }
+            
             $row++;
         }
 
@@ -576,8 +609,9 @@ class ProcurementItemController extends Controller
             ->setFormatCode('#,##0');
 
         // Auto-size columns
-        foreach (range('A', 'U') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+        for ($i = 1; $i <= $lastColIndex; $i++) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
         }
 
         // Generate filename with timestamp

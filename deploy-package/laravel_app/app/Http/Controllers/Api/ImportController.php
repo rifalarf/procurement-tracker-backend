@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Buyer;
+use App\Models\CustomFieldConfig;
 use App\Models\Department;
 use App\Models\ImportMapping;
 use App\Models\ImportSession;
@@ -607,7 +608,7 @@ class ImportController extends Controller
      */
     private function getAvailableFields(): array
     {
-        return [
+        $fields = [
             ['value' => 'no_pr', 'label' => 'NO PR', 'required' => true],
             ['value' => 'mat_code', 'label' => 'Mat Code', 'required' => false],
             ['value' => 'nama_barang', 'label' => 'Nama Barang', 'required' => false],
@@ -630,6 +631,18 @@ class ImportController extends Controller
             ['value' => 'keterangan', 'label' => 'Keterangan', 'required' => false],
             ['value' => 'item_category', 'label' => 'Item Category', 'required' => false],
         ];
+
+        // Add active custom fields dynamically
+        $activeCustomFields = CustomFieldConfig::active()->get();
+        foreach ($activeCustomFields as $config) {
+            $fields[] = [
+                'value' => $config->field_name,
+                'label' => $config->label ?? ucfirst(str_replace('_', ' ', $config->field_name)),
+                'required' => false,
+            ];
+        }
+
+        return $fields;
     }
 
     /**

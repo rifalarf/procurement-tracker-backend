@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Buyer;
+use App\Models\CustomFieldConfig;
 use App\Models\Department;
 use App\Models\ImportMapping;
 use App\Models\ImportSession;
@@ -607,7 +608,7 @@ class ImportController extends Controller
      */
     private function getAvailableFields(): array
     {
-        return [
+        $fields = [
             ['value' => 'no_pr', 'label' => 'NO PR', 'required' => true],
             ['value' => 'mat_code', 'label' => 'Mat Code', 'required' => false],
             ['value' => 'nama_barang', 'label' => 'Nama Barang', 'required' => false],
@@ -630,6 +631,18 @@ class ImportController extends Controller
             ['value' => 'keterangan', 'label' => 'Keterangan', 'required' => false],
             ['value' => 'item_category', 'label' => 'Item Category', 'required' => false],
         ];
+
+        // Add active custom fields dynamically
+        $activeCustomFields = CustomFieldConfig::active()->get();
+        foreach ($activeCustomFields as $config) {
+            $fields[] = [
+                'value' => $config->field_name,
+                'label' => $config->label ?? ucfirst(str_replace('_', ' ', $config->field_name)),
+                'required' => false,
+            ];
+        }
+
+        return $fields;
     }
 
     /**
@@ -658,7 +671,7 @@ class ImportController extends Controller
     private function resolveLookups(array $data, array $departments, array $buyers, array $statuses): array
     {
         // Resolve department
-        if (isset($data['department_id']) && !is_numeric($data['department_id'])) {
+        if (isset($data['department_id']) && $data['department_id'] !== null && $data['department_id'] !== '' && !is_numeric($data['department_id'])) {
             $deptName = $data['department_id'];
             $data['department_id'] = $departments[$deptName] ?? null;
             
@@ -671,6 +684,9 @@ class ImportController extends Controller
                     }
                 }
             }
+        } elseif (!isset($data['department_id']) || $data['department_id'] === '' || $data['department_id'] === null) {
+            // Empty or null department_id - set to null explicitly
+            $data['department_id'] = null;
         }
         
         // Resolve buyer
@@ -699,10 +715,13 @@ class ImportController extends Controller
                     }
                 }
             }
+        } else {
+            // Empty or null buyer_id - set to null explicitly
+            $data['buyer_id'] = null;
         }
         
         // Resolve status
-        if (isset($data['status_id']) && !is_numeric($data['status_id'])) {
+        if (isset($data['status_id']) && $data['status_id'] !== null && $data['status_id'] !== '' && !is_numeric($data['status_id'])) {
             $statusName = $data['status_id'];
             $data['status_id'] = $statuses[$statusName] ?? null;
             
@@ -714,6 +733,9 @@ class ImportController extends Controller
                     }
                 }
             }
+        } elseif (!isset($data['status_id']) || $data['status_id'] === '' || $data['status_id'] === null) {
+            // Empty or null status_id - set to null explicitly
+            $data['status_id'] = null;
         }
         
         return $data;

@@ -35,10 +35,7 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Revoke previous tokens
-        $user->tokens()->delete();
-
-        // Create new token
+        // Create new token for this device (previous tokens are kept for multi-device support)
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([

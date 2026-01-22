@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BuyerController;
+use App\Http\Controllers\Api\ColumnConfigController;
+use App\Http\Controllers\Api\CustomFieldConfigController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\ProcurementItemController;
@@ -76,6 +78,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/statuses/{status}', [StatusController::class, 'destroy']);
     });
 
+    // Custom Field Configs
+    Route::get('/custom-field-configs/active', [CustomFieldConfigController::class, 'getActive']);
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/custom-field-configs', [CustomFieldConfigController::class, 'index']);
+        Route::put('/custom-field-configs', [CustomFieldConfigController::class, 'update']);
+    });
+
+    // Column Configs (column order and width settings)
+    Route::get('/column-configs', [ColumnConfigController::class, 'index']);  // All authenticated users can read
+    Route::get('/column-configs/table', [ColumnConfigController::class, 'getTableColumns']);
+    Route::get('/column-configs/detail', [ColumnConfigController::class, 'getDetailColumns']);
+    Route::get('/column-configs/width-options', [ColumnConfigController::class, 'widthOptions']);
+    Route::middleware('role:admin')->group(function () {
+        Route::put('/column-configs', [ColumnConfigController::class, 'update']);
+        Route::post('/column-configs/reorder', [ColumnConfigController::class, 'reorder']);
+        Route::post('/column-configs/reset', [ColumnConfigController::class, 'reset']);
+    });
+
     // Procurement Items
     Route::get('/procurement-items', [ProcurementItemController::class, 'index']);
     Route::get('/procurement-items/export', [ProcurementItemController::class, 'export']);
@@ -139,4 +159,3 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/reset', [\App\Http\Controllers\Api\FieldPermissionController::class, 'reset']);
     });
 });
-

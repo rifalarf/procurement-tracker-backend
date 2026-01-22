@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CustomFieldConfig;
 use App\Models\FieldPermission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,18 @@ class FieldPermissionController extends Controller
         'tgl_po',
         'tgl_datang',
         'keterangan',
+        // Custom fields are added dynamically
+    ];
+
+    /**
+     * Custom fields (added dynamically based on active configs)
+     */
+    private const CUSTOM_FIELDS = [
+        'custom_field_1',
+        'custom_field_2',
+        'custom_field_3',
+        'custom_field_4',
+        'custom_field_5',
     ];
 
     /**
@@ -62,7 +75,43 @@ class FieldPermissionController extends Controller
         'tgl_po' => 'Tanggal PO',
         'tgl_datang' => 'Tanggal Datang',
         'keterangan' => 'Keterangan',
+        // Custom field labels are fetched dynamically
     ];
+
+    /**
+     * Get all fields including active custom fields
+     */
+    private function getAllFieldsWithCustom(): array
+    {
+        $fields = self::ALL_FIELDS;
+        
+        // Add all custom fields (not just active ones - permissions should exist for all)
+        foreach (self::CUSTOM_FIELDS as $customField) {
+            $fields[] = $customField;
+        }
+        
+        return $fields;
+    }
+
+    /**
+     * Get field labels including custom field labels from config
+     */
+    private function getFieldLabels(): array
+    {
+        $labels = self::FIELD_LABELS;
+        
+        // Get custom field labels from configs
+        $customConfigs = CustomFieldConfig::all()->keyBy('field_name');
+        foreach (self::CUSTOM_FIELDS as $customField) {
+            $config = $customConfigs->get($customField);
+            // Use the configured label, or fallback to default name
+            $labels[$customField] = $config && $config->label 
+                ? $config->label
+                : ucfirst(str_replace('_', ' ', $customField));
+        }
+        
+        return $labels;
+    }
 
     /**
      * Get all permissions grouped by role
@@ -70,6 +119,8 @@ class FieldPermissionController extends Controller
     public function index(): JsonResponse
     {
         $permissions = FieldPermission::all();
+        $fieldLabels = $this->getFieldLabels();
+        $allFields = $this->getAllFieldsWithCustom();
         
         // Group by role
         $grouped = [
@@ -86,18 +137,21 @@ class FieldPermissionController extends Controller
                     'id' => $permission->id,
                     'role' => $permission->role,
                     'field_name' => $permission->field_name,
-                    'field_label' => self::FIELD_LABELS[$permission->field_name] ?? $permission->field_name,
+                    'field_label' => $fieldLabels[$permission->field_name] ?? $permission->field_name,
                     'can_view' => $permission->can_view,
                     'can_edit' => $permission->can_edit,
+                    'is_custom_field' => in_array($permission->field_name, self::CUSTOM_FIELDS),
                 ];
             }
         }
 
         // Sort each role's permissions by field order
-        foreach ($grouped as $role => &$permissions) {
-            usort($permissions, function ($a, $b) {
-                $orderA = array_search($a['field_name'], self::ALL_FIELDS);
-                $orderB = array_search($b['field_name'], self::ALL_FIELDS);
+        foreach ($grouped as $role => &$perms) {
+            usort($perms, function ($a, $b) use ($allFields) {
+                $orderA = array_search($a['field_name'], $allFields);
+                $orderB = array_search($b['field_name'], $allFields);
+                if ($orderA === false) $orderA = 999;
+                if ($orderB === false) $orderB = 999;
                 return $orderA - $orderB;
             });
         }
@@ -220,11 +274,15 @@ class FieldPermissionController extends Controller
      */
     public function fields(): JsonResponse
     {
+        $allFields = $this->getAllFieldsWithCustom();
+        $fieldLabels = $this->getFieldLabels();
+        
         $fields = [];
-        foreach (self::ALL_FIELDS as $field) {
+        foreach ($allFields as $field) {
             $fields[] = [
                 'name' => $field,
-                'label' => self::FIELD_LABELS[$field] ?? $field,
+                'label' => $fieldLabels[$field] ?? $field,
+                'is_custom_field' => in_array($field, self::CUSTOM_FIELDS),
             ];
         }
 

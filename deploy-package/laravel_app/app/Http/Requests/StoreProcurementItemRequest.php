@@ -35,6 +35,12 @@ class StoreProcurementItemRequest extends FormRequest
             'tgl_po' => 'nullable|date',
             'tgl_datang' => 'nullable|date',
             'keterangan' => 'nullable|string',
+            // Custom fields
+            'custom_field_1' => 'nullable|string|max:255',
+            'custom_field_2' => 'nullable|string|max:255',
+            'custom_field_3' => 'nullable|string|max:255',
+            'custom_field_4' => 'nullable|string|max:255',
+            'custom_field_5' => 'nullable|string|max:255',
         ];
     }
 

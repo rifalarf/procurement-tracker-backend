@@ -12,18 +12,10 @@ class ProcurementItemPolicy
      */
     public function view(User $user, ProcurementItem $item): bool
     {
-        // Admin, AVP, and Staff can view all items
-        if (in_array($user->role, ['admin', 'avp', 'staff'])) {
-            return true;
-        }
-        
-        // Buyer can view their assigned items or unassigned items
-        if ($item->buyer_id === null) {
-            return true;
-        }
-        
-        $buyer = $item->buyer;
-        return $buyer && $buyer->user_id === $user->id;
+        // Admin, AVP, Staff, and Buyer can view all items
+        // Buyers can view items from any department (cross-department visibility)
+        // This enables view-only mode for items they cannot edit
+        return in_array($user->role, ['admin', 'avp', 'staff', 'buyer']);
     }
 
     /**

@@ -32,6 +32,12 @@ class PermissionSeeder extends Seeder
         'tgl_po',
         'tgl_datang',
         'keterangan',
+        // Custom fields
+        'custom_field_1',
+        'custom_field_2',
+        'custom_field_3',
+        'custom_field_4',
+        'custom_field_5',
     ];
 
     /**
@@ -48,6 +54,12 @@ class PermissionSeeder extends Seeder
         'tgl_po',
         'tgl_datang',
         'keterangan',
+        // Buyers can also edit custom fields
+        'custom_field_1',
+        'custom_field_2',
+        'custom_field_3',
+        'custom_field_4',
+        'custom_field_5',
     ];
 
     /**
@@ -58,6 +70,12 @@ class PermissionSeeder extends Seeder
         'status_id',
         'tgl_status',
         'keterangan',
+        // AVP can also edit custom fields
+        'custom_field_1',
+        'custom_field_2',
+        'custom_field_3',
+        'custom_field_4',
+        'custom_field_5',
     ];
 
     /**

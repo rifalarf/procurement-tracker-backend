@@ -61,6 +61,14 @@ class ProcurementItemResource extends JsonResource
             'tgl_po' => $this->tgl_po?->format('Y-m-d'),
             'tgl_datang' => $this->tgl_datang?->format('Y-m-d'),
             'keterangan' => $this->keterangan,
+            
+            // Custom fields
+            'custom_field_1' => $this->custom_field_1,
+            'custom_field_2' => $this->custom_field_2,
+            'custom_field_3' => $this->custom_field_3,
+            'custom_field_4' => $this->custom_field_4,
+            'custom_field_5' => $this->custom_field_5,
+            
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             
