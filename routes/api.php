@@ -89,7 +89,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/column-configs', [ColumnConfigController::class, 'index']);  // All authenticated users can read
     Route::get('/column-configs/table', [ColumnConfigController::class, 'getTableColumns']);
     Route::get('/column-configs/detail', [ColumnConfigController::class, 'getDetailColumns']);
-    Route::get('/column-configs/width-options', [ColumnConfigController::class, 'widthOptions']);
     Route::middleware('role:admin')->group(function () {
         Route::put('/column-configs', [ColumnConfigController::class, 'update']);
         Route::post('/column-configs/reorder', [ColumnConfigController::class, 'reorder']);

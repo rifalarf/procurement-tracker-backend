@@ -24,7 +24,6 @@ class ColumnConfigController extends Controller
         $enrichedConfigs = $configs->map(function ($config) use ($customFieldConfigs) {
             $data = $config->toArray();
             $data['is_custom_field'] = $config->isCustomField();
-            $data['pixel_width'] = $config->getPixelWidth();
 
             // For custom fields, check if they are active in CustomFieldConfig
             if ($config->isCustomField()) {
@@ -61,7 +60,6 @@ class ColumnConfigController extends Controller
         })->map(function ($config) use ($customFieldConfigs) {
             $data = $config->toArray();
             $data['is_custom_field'] = $config->isCustomField();
-            $data['pixel_width'] = $config->getPixelWidth();
 
             // Use custom field label if ColumnConfig label is empty
             if ($config->isCustomField()) {
@@ -96,7 +94,6 @@ class ColumnConfigController extends Controller
         })->map(function ($config) use ($customFieldConfigs) {
             $data = $config->toArray();
             $data['is_custom_field'] = $config->isCustomField();
-            $data['pixel_width'] = $config->getPixelWidth();
 
             // Use custom field label if ColumnConfig label is empty
             if ($config->isCustomField()) {
@@ -123,7 +120,6 @@ class ColumnConfigController extends Controller
             'configs.*.id' => 'required|integer|exists:column_configs,id',
             'configs.*.label' => 'nullable|string|max:100',
             'configs.*.display_order' => 'nullable|integer|min:0',
-            'configs.*.width' => 'nullable|string|max:20',
             'configs.*.is_visible_in_table' => 'nullable|boolean',
             'configs.*.is_visible_in_detail' => 'nullable|boolean',
         ]);
@@ -143,9 +139,6 @@ class ColumnConfigController extends Controller
                     }
                     if (array_key_exists('display_order', $configData)) {
                         $updateData['display_order'] = $configData['display_order'];
-                    }
-                    if (array_key_exists('width', $configData)) {
-                        $updateData['width'] = $configData['width'];
                     }
                     if (array_key_exists('is_visible_in_table', $configData)) {
                         $updateData['is_visible_in_table'] = $configData['is_visible_in_table'];
@@ -219,32 +212,32 @@ class ColumnConfigController extends Controller
         $userId = auth()->id();
 
         $defaultColumns = [
-            ['field_name' => 'no_pr', 'label' => 'No PR', 'display_order' => 1, 'width' => 'md', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'mat_code', 'label' => 'Mat Code', 'display_order' => 2, 'width' => 'sm', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'nama_barang', 'label' => 'Nama Barang', 'display_order' => 3, 'width' => 'xl', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'tgl_terima_dokumen', 'label' => 'Tgl Terima Dok', 'display_order' => 4, 'width' => 'md', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'qty', 'label' => 'Qty', 'display_order' => 5, 'width' => 'sm', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'nilai', 'label' => 'Nilai', 'display_order' => 6, 'width' => 'md', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'department_id', 'label' => 'Bagian', 'display_order' => 7, 'width' => 'md', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'buyer_id', 'label' => 'Buyer', 'display_order' => 8, 'width' => 'md', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'user_requester', 'label' => 'User', 'display_order' => 9, 'width' => 'md', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'status_id', 'label' => 'Status', 'display_order' => 10, 'width' => 'md', 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
-            ['field_name' => 'item_category', 'label' => 'Item Category', 'display_order' => 11, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'um', 'label' => 'UM', 'display_order' => 12, 'width' => 'sm', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'pg', 'label' => 'PG', 'display_order' => 13, 'width' => 'sm', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'procx_manual', 'label' => 'PROCX/MANUAL', 'display_order' => 14, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'tgl_status', 'label' => 'Tanggal Status', 'display_order' => 15, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'is_emergency', 'label' => 'Emergency', 'display_order' => 16, 'width' => 'sm', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'no_po', 'label' => 'No PO', 'display_order' => 17, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'nama_vendor', 'label' => 'Nama Vendor', 'display_order' => 18, 'width' => 'lg', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'tgl_po', 'label' => 'Tanggal PO', 'display_order' => 19, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'tgl_datang', 'label' => 'Tanggal Datang', 'display_order' => 20, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'keterangan', 'label' => 'Keterangan', 'display_order' => 21, 'width' => 'xl', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'custom_field_1', 'label' => 'Custom 1', 'display_order' => 22, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'custom_field_2', 'label' => 'Custom 2', 'display_order' => 23, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'custom_field_3', 'label' => 'Custom 3', 'display_order' => 24, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'custom_field_4', 'label' => 'Custom 4', 'display_order' => 25, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
-            ['field_name' => 'custom_field_5', 'label' => 'Custom 5', 'display_order' => 26, 'width' => 'md', 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'no_pr', 'label' => 'No PR', 'display_order' => 1, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'mat_code', 'label' => 'Mat Code', 'display_order' => 2, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'nama_barang', 'label' => 'Nama Barang', 'display_order' => 3, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'tgl_terima_dokumen', 'label' => 'Tgl Terima Dok', 'display_order' => 4, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'qty', 'label' => 'Qty', 'display_order' => 5, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'nilai', 'label' => 'Nilai', 'display_order' => 6, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'department_id', 'label' => 'Bagian', 'display_order' => 7, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'buyer_id', 'label' => 'Buyer', 'display_order' => 8, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'user_requester', 'label' => 'User', 'display_order' => 9, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'status_id', 'label' => 'Status', 'display_order' => 10, 'is_visible_in_table' => true, 'is_visible_in_detail' => true],
+            ['field_name' => 'item_category', 'label' => 'Item Category', 'display_order' => 11, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'um', 'label' => 'UM', 'display_order' => 12, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'pg', 'label' => 'PG', 'display_order' => 13, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'procx_manual', 'label' => 'PROCX/MANUAL', 'display_order' => 14, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'tgl_status', 'label' => 'Tanggal Status', 'display_order' => 15, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'is_emergency', 'label' => 'Emergency', 'display_order' => 16, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'no_po', 'label' => 'No PO', 'display_order' => 17, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'nama_vendor', 'label' => 'Nama Vendor', 'display_order' => 18, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'tgl_po', 'label' => 'Tanggal PO', 'display_order' => 19, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'tgl_datang', 'label' => 'Tanggal Datang', 'display_order' => 20, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'keterangan', 'label' => 'Keterangan', 'display_order' => 21, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'custom_field_1', 'label' => 'Custom 1', 'display_order' => 22, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'custom_field_2', 'label' => 'Custom 2', 'display_order' => 23, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'custom_field_3', 'label' => 'Custom 3', 'display_order' => 24, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'custom_field_4', 'label' => 'Custom 4', 'display_order' => 25, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
+            ['field_name' => 'custom_field_5', 'label' => 'Custom 5', 'display_order' => 26, 'is_visible_in_table' => false, 'is_visible_in_detail' => true],
         ];
 
         DB::beginTransaction();
@@ -267,21 +260,5 @@ class ColumnConfigController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
-    }
-
-    /**
-     * Get available width options
-     */
-    public function widthOptions(): JsonResponse
-    {
-        $options = [
-            ['value' => 'sm', 'label' => 'Kecil (80px)', 'pixels' => '80px'],
-            ['value' => 'md', 'label' => 'Sedang (120px)', 'pixels' => '120px'],
-            ['value' => 'lg', 'label' => 'Besar (180px)', 'pixels' => '180px'],
-            ['value' => 'xl', 'label' => 'Sangat Besar (250px)', 'pixels' => '250px'],
-            ['value' => 'auto', 'label' => 'Otomatis', 'pixels' => 'auto'],
-        ];
-
-        return response()->json(['data' => $options]);
     }
 }
