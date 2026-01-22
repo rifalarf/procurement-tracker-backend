@@ -314,6 +314,9 @@ class ImportController extends Controller
                     
                     // Check for exact duplicate (all important fields match including status)
                     // Search for any version of this base no_pr
+                    // Note: normalize nilai to 2 decimal places to match database column type decimal(18,2)
+                    $normalizedNilai = round((float) ($rowData['nilai'] ?? 0), 2);
+                    
                     $existingExact = ProcurementItem::where(function($query) use ($baseNoPr) {
                             $query->where('no_pr', $baseNoPr)
                                   ->orWhere('no_pr', 'LIKE', $baseNoPr . '_%');
@@ -321,7 +324,7 @@ class ImportController extends Controller
                         ->where('mat_code', $rowData['mat_code'] ?? null)
                         ->where('nama_barang', $rowData['nama_barang'] ?? null)
                         ->where('qty', $rowData['qty'] ?? 0)
-                        ->where('nilai', $rowData['nilai'] ?? 0)
+                        ->where('nilai', $normalizedNilai)
                         ->where('department_id', $rowData['department_id'] ?? null)
                         ->where('status_id', $rowData['status_id'] ?? null)
                         ->first();
