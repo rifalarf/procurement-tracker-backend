@@ -307,95 +307,53 @@ class ImportController extends Controller
                     // Add metadata
                     $rowData['created_by'] = auth()->id();
                     
-                    $originalNoPr = $rowData['no_pr'];
+                    $noPr = $rowData['no_pr'];
+                    $namaBarang = $rowData['nama_barang'] ?? null;
                     
-                    // Extract base no_pr (without version suffix) if it already has one
-                    $baseNoPr = preg_replace('/_\d+$/', '', $originalNoPr);
-                    
-                    // Check for exact duplicate (all important fields match including status)
-                    // Search for any version of this base no_pr
-                    // Note: normalize nilai to 2 decimal places to match database column type decimal(18,2)
-                    $normalizedNilai = round((float) ($rowData['nilai'] ?? 0), 2);
-                    
-                    $existingExact = ProcurementItem::where(function($query) use ($baseNoPr) {
-                            $query->where('no_pr', $baseNoPr)
-                                  ->orWhere('no_pr', 'LIKE', $baseNoPr . '_%');
-                        })
-                        ->where('mat_code', $rowData['mat_code'] ?? null)
-                        ->where('nama_barang', $rowData['nama_barang'] ?? null)
-                        ->where('qty', $rowData['qty'] ?? 0)
-                        ->where('nilai', $normalizedNilai)
-                        ->where('department_id', $rowData['department_id'] ?? null)
-                        ->where('status_id', $rowData['status_id'] ?? null)
+                    // Check if item with same NO PR + nama_barang exists
+                    // This is the unique key combination
+                    $existingItem = ProcurementItem::where('no_pr', $noPr)
+                        ->where('nama_barang', $namaBarang)
                         ->first();
                     
-                    if ($existingExact) {
-                        // Exact duplicate found - skip
-                        $skippedCount++;
-                        $importLog[] = [
-                            'row' => $i,
-                            'action' => 'SKIP',
-                            'no_pr' => $originalNoPr,
-                            'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
-                            'reason' => 'Exact duplicate found (id: ' . $existingExact->id . ')',
-                        ];
-                        continue;
-                    }
-                    
-                    // Count existing records with this base no_pr (including versioned ones)
-                    $existingCount = ProcurementItem::where(function($query) use ($baseNoPr) {
-                            $query->where('no_pr', $baseNoPr)
-                                  ->orWhere('no_pr', 'LIKE', $baseNoPr . '_%');
-                        })->count();
-                    
-                    // Determine the no_pr value with version suffix
-                    if ($existingCount > 0) {
-                        // Find the max version number
-                        $maxVersionNum = 1;
-                        $existingNoPrs = ProcurementItem::where(function($query) use ($baseNoPr) {
-                                $query->where('no_pr', $baseNoPr)
-                                      ->orWhere('no_pr', 'LIKE', $baseNoPr . '_%');
-                            })
-                            ->pluck('no_pr')
-                            ->toArray();
+                    if ($existingItem) {
+                        // Same NO PR + same item → UPDATE existing row
+                        // Remove created_by from update data (keep original creator)
+                        unset($rowData['created_by']);
+                        $rowData['updated_by'] = auth()->id();
                         
-                        foreach ($existingNoPrs as $existingNoPr) {
-                            if ($existingNoPr === $baseNoPr) {
-                                // Base version counts as version 1
-                                $maxVersionNum = max($maxVersionNum, 1);
-                            } elseif (preg_match('/_(\d+)$/', $existingNoPr, $matches)) {
-                                $maxVersionNum = max($maxVersionNum, (int)$matches[1]);
-                            }
-                        }
+                        // Keep original no_pr and version
+                        unset($rowData['no_pr']);
+                        unset($rowData['version']);
                         
-                        // New version is max + 1
-                        $newVersion = $maxVersionNum + 1;
-                        $rowData['no_pr'] = $baseNoPr . '_' . $newVersion;
-                        $rowData['version'] = $newVersion;
-                        
+                        $existingItem->update($rowData);
                         $updatedCount++;
-                        $newItem = ProcurementItem::create($rowData);
                         $importLog[] = [
                             'row' => $i,
                             'action' => 'UPDATE',
-                            'no_pr' => $rowData['no_pr'],
-                            'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
-                            'version' => $newVersion,
-                            'new_id' => $newItem->id,
+                            'no_pr' => $noPr,
+                            'nama_barang' => substr($namaBarang ?? '', 0, 30),
+                            'id' => $existingItem->id,
+                            'version' => $existingItem->version,
+                            'reason' => 'Updated existing item (same NO PR + nama_barang)',
                         ];
                     } else {
-                        // First occurrence - use base no_pr without suffix
-                        $rowData['no_pr'] = $baseNoPr;
-                        $rowData['version'] = 1;
+                        // NO PR exists but different item, OR first occurrence
+                        // → INSERT new row
+                        
+                        // Count existing items with same NO PR to determine version/sequence
+                        // Version 1 = first item (no badge), Version 2+ = badge number
+                        $existingCount = ProcurementItem::where('no_pr', $noPr)->count();
+                        $rowData['version'] = $existingCount + 1;
                         
                         $successCount++;
                         $newItem = ProcurementItem::create($rowData);
                         $importLog[] = [
                             'row' => $i,
                             'action' => 'NEW',
-                            'no_pr' => $baseNoPr,
-                            'nama_barang' => substr($rowData['nama_barang'] ?? '', 0, 30),
-                            'version' => 1,
+                            'no_pr' => $noPr,
+                            'nama_barang' => substr($namaBarang ?? '', 0, 30),
+                            'version' => $rowData['version'],
                             'new_id' => $newItem->id,
                         ];
                     }

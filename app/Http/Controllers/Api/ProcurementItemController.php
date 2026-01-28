@@ -12,6 +12,7 @@ use App\Models\ActivityLog;
 use App\Models\CustomFieldConfig;
 use App\Models\FieldPermission;
 use App\Models\ProcurementItem;
+use App\Models\StatusHistory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -258,7 +259,6 @@ class ProcurementItemController extends Controller
             'data' => new ProcurementItemResource($procurementItem->load(['department', 'buyer', 'status'])),
         ]);
     }
-
     /**
      * Update only the status of a procurement item
      */
@@ -266,27 +266,120 @@ class ProcurementItemController extends Controller
     {
         $this->authorize('update', $procurementItem);
         
-        $oldValues = ['status_id' => $procurementItem->status_id];
+        $oldStatusId = $procurementItem->status_id;
+        $oldValues = ['status_id' => $oldStatusId];
 
         $validated = $request->validated();
+        $newStatusId = $validated['status_id'];
+
+        // Use custom date if provided, otherwise use now()
+        $changedAt = isset($validated['changed_at']) 
+            ? \Carbon\Carbon::parse($validated['changed_at']) 
+            : now();
+
+        // Check for duplicate: get the last status history entry for this item
+        $lastHistoryEntry = StatusHistory::where('procurement_item_id', $procurementItem->id)
+            ->orderBy('changed_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
+
+        // Prevent duplicate consecutive status entries
+        // If the new status is the same as the last history entry's new_status, skip creating a new entry
+        $isDuplicate = $lastHistoryEntry && $lastHistoryEntry->new_status_id === $newStatusId;
 
         // If status is being set, update the date; if cleared, remove the date
-        if ($validated['status_id'] !== null) {
-            $validated['tgl_status'] = now();
+        if ($newStatusId !== null) {
+            $procurementItem->tgl_status = $changedAt;
         } else {
-            $validated['tgl_status'] = null;
+            $procurementItem->tgl_status = null;
         }
         
-        $validated['updated_by'] = $request->user()->id;
+        $procurementItem->status_id = $newStatusId;
+        $procurementItem->updated_by = $request->user()->id;
+        $procurementItem->save();
 
-        $procurementItem->update($validated);
+        // Record status history if status actually changed AND is not a duplicate
+        if ($oldStatusId !== $newStatusId && !$isDuplicate) {
+            StatusHistory::create([
+                'procurement_item_id' => $procurementItem->id,
+                'old_status_id' => $oldStatusId,
+                'new_status_id' => $newStatusId,
+                'changed_by' => $request->user()->id,
+                'changed_at' => $changedAt,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+        }
 
         // Log activity
         $this->logActivity($request, $procurementItem, 'edited', 'Updated status for: ' . $procurementItem->no_pr, $oldValues, ['status_id' => $procurementItem->status_id]);
 
         return response()->json([
-            'message' => 'Status updated successfully',
+            'message' => $isDuplicate ? 'Status tidak berubah (duplikat)' : 'Status updated successfully',
             'data' => new ProcurementItemResource($procurementItem->load(['department', 'buyer', 'status'])),
+            'is_duplicate' => $isDuplicate,
+        ]);
+    }
+
+    /**
+     * Get status history for a procurement item
+     */
+    public function getStatusHistory(ProcurementItem $procurementItem): JsonResponse
+    {
+        $this->authorize('view', $procurementItem);
+
+        // Load the creator and buyer for timeline attribution
+        $procurementItem->load(['status', 'createdBy', 'buyer', 'buyer.user']);
+
+        $history = StatusHistory::with(['oldStatus', 'newStatus', 'changedByUser'])
+            ->where('procurement_item_id', $procurementItem->id)
+            ->orderBy('changed_at', 'asc')
+            ->get()
+            ->map(function ($record) {
+                return [
+                    'id' => $record->id,
+                    'old_status' => $record->oldStatus ? [
+                        'id' => $record->oldStatus->id,
+                        'name' => $record->oldStatus->name,
+                        'bg_color' => $record->oldStatus->bg_color,
+                        'text_color' => $record->oldStatus->text_color,
+                    ] : null,
+                    'new_status' => $record->newStatus ? [
+                        'id' => $record->newStatus->id,
+                        'name' => $record->newStatus->name,
+                        'bg_color' => $record->newStatus->bg_color,
+                        'text_color' => $record->newStatus->text_color,
+                    ] : null,
+                    'changed_by' => $record->changedByUser ? [
+                        'id' => $record->changedByUser->id,
+                        'name' => $record->changedByUser->name,
+                    ] : null,
+                    'changed_at' => $record->changed_at->toIso8601String(),
+                    'notes' => $record->notes,
+                ];
+            });
+
+        return response()->json([
+            'data' => $history,
+            'item' => [
+                'id' => $procurementItem->id,
+                'no_pr' => $procurementItem->no_pr,
+                'nama_barang' => $procurementItem->nama_barang,
+                'tgl_terima_dokumen' => $procurementItem->tgl_terima_dokumen?->toIso8601String(),
+                'created_by' => $procurementItem->createdBy ? [
+                    'id' => $procurementItem->createdBy->id,
+                    'name' => $procurementItem->createdBy->name,
+                ] : null,
+                'buyer' => $procurementItem->buyer ? [
+                    'id' => $procurementItem->buyer->id,
+                    'name' => $procurementItem->buyer->name,
+                ] : null,
+                'current_status' => $procurementItem->status ? [
+                    'id' => $procurementItem->status->id,
+                    'name' => $procurementItem->status->name,
+                    'bg_color' => $procurementItem->status->bg_color,
+                    'text_color' => $procurementItem->status->text_color,
+                ] : null,
+            ],
         ]);
     }
 
@@ -424,6 +517,9 @@ class ProcurementItemController extends Controller
         }
         if (is_bool($value)) {
             return $value ? '1' : '0';
+        }
+        if (is_array($value)) {
+            return json_encode($value);
         }
         return (string) $value;
     }
