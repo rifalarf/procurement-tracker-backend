@@ -19,22 +19,27 @@ class UserSeeder extends Seeder
      * Warna untuk buyer badges
      */
     private array $buyerColors = [
-        'Dian Sholihat' => ['color' => '#e8eaed', 'text_color' => '#000000'],
-        'Tathu RA' => ['color' => '#d4edbc', 'text_color' => '#000000'],
-        'Eva Sepsilia Sari' => ['color' => '#ffcfc9', 'text_color' => '#000000'],
-        'Ato Heryanto' => ['color' => '#ffc8aa', 'text_color' => '#000000'],
-        'Mail Marzuki' => ['color' => '#ffe5a0', 'text_color' => '#000000'],
-        'Mutia Virgiana' => ['color' => '#bfe1f6', 'text_color' => '#000000'],
-        'Ade Sunarya' => ['color' => '#e8eaed', 'text_color' => '#000000'],
-        'Gugun GT' => ['color' => '#e6cff2', 'text_color' => '#000000'],
-        'Erik Erdiana' => ['color' => '#3d3d3d', 'text_color' => '#ffffff'],
-        'Dicky Setiagraha' => ['color' => '#b10202', 'text_color' => '#ffffff'],
-        'Erwin Herdiana' => ['color' => '#753800', 'text_color' => '#ffffff'],
-        'Akbar Faturahman' => ['color' => '#473822', 'text_color' => '#ffffff'],
-        'Eggy Baharudin' => ['color' => '#11734b', 'text_color' => '#ffffff'],
-        'Heru Winata Praja' => ['color' => '#0a53a8', 'text_color' => '#ffffff'],
-        'Nawang Wulan' => ['color' => '#215a6c', 'text_color' => '#ffffff'],
-        'Cholida Maranani' => ['color' => '#5a3286', 'text_color' => '#ffffff'],
+        // PBJ1
+        'Dicky Setiagraha' => ['color' => '#fef9c3', 'text_color' => '#854d0e'], // Yellow (Bid Open)
+        'Ato Heryanto' => ['color' => '#dcfce7', 'text_color' => '#166534'],     // Green (Approve)
+        'Cholida Maranani' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],  // Blue (Eval)
+        'Heru Winata Praja' => ['color' => '#ffedd5', 'text_color' => '#9a3412'], // Orange (RFQ)
+        'Eva Sepsilia Sari' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],  // Purple (Nego)
+        'Nawang Wulan' => ['color' => '#f1f5f9', 'text_color' => '#334155'],      // Gray (DUR)
+
+        // PBJ2
+        'Gugun GT' => ['color' => '#dcfce7', 'text_color' => '#166534'],          // Green
+        'Dian Sholihat' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],     // Purple
+        'Erwin Herdiana' => ['color' => '#ffedd5', 'text_color' => '#9a3412'],    // Orange
+        'Tathu RA' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],          // Yellow
+        'Erik Erdiana' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],      // Blue
+        'Eggy Baharudin' => ['color' => '#f1f5f9', 'text_color' => '#334155'],    // Gray
+        'Mutia Virgiana' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],    // Yellow
+
+        // PJDP
+        'Mail Marzuki' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],      // Blue
+        'Ade Sunarya' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],       // Purple
+        'Akbar Faturahman' => ['color' => '#dcfce7', 'text_color' => '#166534'],  // Green
     ];
 
     public function run(): void
@@ -58,7 +63,7 @@ class UserSeeder extends Seeder
         $this->createUser('3123090', 'Guntur Gumilar', 'avp', $pbj2);
 
         // ========== BUYERS (16 orang sesuai gambar) ==========
-        
+
         // PBJ1 Buyers
         $this->createUser('3082563', 'Dicky Setiagraha', 'buyer', $pbj1);
         $this->createUser('3942046', 'Ato Heryanto', 'buyer', $pbj1);
@@ -105,7 +110,7 @@ class UserSeeder extends Seeder
         // Create buyer record if role is buyer
         if ($role === 'buyer') {
             $colors = $this->buyerColors[$name] ?? $this->generateRandomColor();
-            
+
             Buyer::updateOrCreate(
                 ['user_id' => $user->id],
                 [
@@ -126,9 +131,9 @@ class UserSeeder extends Seeder
         $hue = rand(0, 360);
         $saturation = rand(25, 45);
         $lightness = rand(75, 85);
-        
+
         $color = $this->hslToHex($hue, $saturation, $lightness);
-        
+
         return [
             'color' => $color,
             'text_color' => '#000000',
@@ -148,17 +153,29 @@ class UserSeeder extends Seeder
         $m = $l - $c / 2;
 
         if ($h < 60) {
-            $r = $c; $g = $x; $b = 0;
+            $r = $c;
+            $g = $x;
+            $b = 0;
         } elseif ($h < 120) {
-            $r = $x; $g = $c; $b = 0;
+            $r = $x;
+            $g = $c;
+            $b = 0;
         } elseif ($h < 180) {
-            $r = 0; $g = $c; $b = $x;
+            $r = 0;
+            $g = $c;
+            $b = $x;
         } elseif ($h < 240) {
-            $r = 0; $g = $x; $b = $c;
+            $r = 0;
+            $g = $x;
+            $b = $c;
         } elseif ($h < 300) {
-            $r = $x; $g = 0; $b = $c;
+            $r = $x;
+            $g = 0;
+            $b = $c;
         } else {
-            $r = $c; $g = 0; $b = $x;
+            $r = $c;
+            $g = 0;
+            $b = $x;
         }
 
         $r = round(($r + $m) * 255);

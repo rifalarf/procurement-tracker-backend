@@ -33,10 +33,10 @@ class DashboardController extends Controller
         $totalPr = $query->count();
         $totalNilai = (clone $query)->sum('nilai');
 
-        // Get status distribution
-        $statuses = Status::all();
+        // Get status distribution (only active statuses)
+        $statuses = Status::where('is_active', true)->orderBy('sort_order')->get();
         $statusDistribution = [];
-        
+
         foreach ($statuses as $status) {
             $count = (clone $query)->where('status_id', $status->id)->count();
             if ($count > 0) {

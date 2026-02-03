@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BuyerController;
 use App\Http\Controllers\Api\ColumnConfigController;
 use App\Http\Controllers\Api\CustomFieldConfigController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\ProcurementItemController;
@@ -53,6 +54,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/password', [AuthController::class, 'changePassword']);
         Route::put('/profile', [AuthController::class, 'updateProfile']);
     });
+
+    // Dashboard Metrics (KPI)
+    Route::get('/dashboard/metrics', [DashboardController::class, 'getMetrics']);
 
     // Master Data - Departments
     Route::get('/departments', [DepartmentController::class, 'index']);
@@ -103,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/procurement-items', [ProcurementItemController::class, 'store']);
     Route::put('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'update']);
     Route::patch('/procurement-items/{procurementItem}/status', [ProcurementItemController::class, 'updateStatus']);
+    Route::get('/procurement-items/{procurementItem}/status-history', [ProcurementItemController::class, 'getStatusHistory']);
     Route::patch('/procurement-items/{procurementItem}/buyer', [ProcurementItemController::class, 'updateBuyer']);
     Route::middleware('role:admin,avp')->group(function () {
         Route::delete('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'destroy']);

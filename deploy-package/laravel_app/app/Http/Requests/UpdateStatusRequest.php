@@ -15,6 +15,8 @@ class UpdateStatusRequest extends FormRequest
     {
         return [
             'status_id' => 'nullable|exists:statuses,id',
+            'changed_at' => 'nullable|date',
+            'notes' => 'nullable|string|max:500',
         ];
     }
 
