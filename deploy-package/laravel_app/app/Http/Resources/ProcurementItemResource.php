@@ -43,6 +43,7 @@ class ProcurementItemResource extends JsonResource
                     'id' => $this->buyer->id,
                     'name' => $this->buyer->name,
                     'color' => $this->buyer->color,
+                    'text_color' => $this->buyer->text_color,
                     'user_id' => $this->buyer->user_id,
                 ] : null;
             }),
@@ -61,17 +62,17 @@ class ProcurementItemResource extends JsonResource
             'tgl_po' => $this->tgl_po?->format('Y-m-d'),
             'tgl_datang' => $this->tgl_datang?->format('Y-m-d'),
             'keterangan' => $this->keterangan,
-            
+
             // Custom fields
             'custom_field_1' => $this->custom_field_1,
             'custom_field_2' => $this->custom_field_2,
             'custom_field_3' => $this->custom_field_3,
             'custom_field_4' => $this->custom_field_4,
             'custom_field_5' => $this->custom_field_5,
-            
+
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-            
+
             // Permission fields
             'can_edit' => $canEdit,
             'editable_fields' => $editableFields,
@@ -107,13 +108,13 @@ class ProcurementItemResource extends JsonResource
             if ($this->buyer && $this->buyer->user_id === $user->id) {
                 return true;
             }
-            
+
             // Check if unassigned and from buyer's department
             if ($this->buyer_id === null) {
                 $departmentIds = $user->departments()->pluck('departments.id')->toArray();
                 return in_array($this->department_id, $departmentIds);
             }
-            
+
             return false;
         }
 

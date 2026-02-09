@@ -27,13 +27,23 @@ return [
     */
     'allowed_origins' => array_filter([
         env('FRONTEND_URL'),
+        // Allow both www and non-www versions
+        'https://procurehub.my.id',
+        'https://www.procurehub.my.id',
+        // Vercel deployment URLs
+        'https://procurehub-kujang.vercel.app',
     ]),
 
-    'allowed_origins_patterns' => env('APP_ENV') === 'local' ? [
-        '/^https?:\/\/localhost:\d+$/',
-        '/^https?:\/\/127\.0\.0\.1:\d+$/',
-        '/^https?:\/\/.*testsprite\.com.*$/',  // TestSprite cloud testing
-    ] : [],
+    'allowed_origins_patterns' => array_merge(
+        // Always allow Vercel preview deployments
+        ['/^https:\/\/.*\.vercel\.app$/'],
+        // Development patterns (localhost)
+        env('APP_ENV') === 'local' ? [
+            '/^https?:\/\/localhost:\d+$/',
+            '/^https?:\/\/127\.0\.0\.1:\d+$/',
+            '/^https?:\/\/.*testsprite\.com.*$/',  // TestSprite cloud testing
+        ] : []
+    ),
 
     'allowed_headers' => ['*'],
 

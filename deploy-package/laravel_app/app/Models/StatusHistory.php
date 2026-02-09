@@ -16,6 +16,7 @@ class StatusHistory extends Model
         'changed_by',
         'changed_at',
         'notes',
+        'event_type',
     ];
 
     protected $casts = [

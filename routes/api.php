@@ -112,7 +112,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Workflow endpoints (controlled status transitions)
     Route::post('/procurement-items/{procurementItem}/advance', [ProcurementItemController::class, 'advance']);
     Route::post('/procurement-items/{procurementItem}/actions/rebid', [ProcurementItemController::class, 'rebid']);
-    Route::post('/procurement-items/{procurementItem}/actions/retender', [ProcurementItemController::class, 'retender']);
     Route::post('/procurement-items/{procurementItem}/actions/cancel', [ProcurementItemController::class, 'cancel']);
 
     // Admin-only procurement item operations

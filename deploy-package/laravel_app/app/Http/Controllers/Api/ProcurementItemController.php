@@ -53,22 +53,22 @@ class ProcurementItemController extends Controller
         // Search - supports field-specific search via search_field parameter
         if ($search = $request->input('search')) {
             $searchField = $request->input('search_field', 'all');
-            
+
             // Define allowed search fields to prevent SQL injection
             $allowedFields = ['no_pr', 'mat_code', 'nama_barang', 'user_requester'];
-            
+
             // Add searchable custom fields
             $searchableCustomFields = CustomFieldConfig::getSearchableFieldNames();
             $allowedFields = array_merge($allowedFields, $searchableCustomFields);
-            
+
             if ($searchField === 'all' || !in_array($searchField, $allowedFields)) {
                 // Search across all fields (default behavior)
                 $query->where(function ($q) use ($search, $searchableCustomFields) {
                     $q->where('no_pr', 'like', "%{$search}%")
-                      ->orWhere('mat_code', 'like', "%{$search}%")
-                      ->orWhere('nama_barang', 'like', "%{$search}%")
-                      ->orWhere('user_requester', 'like', "%{$search}%");
-                    
+                        ->orWhere('mat_code', 'like', "%{$search}%")
+                        ->orWhere('nama_barang', 'like', "%{$search}%")
+                        ->orWhere('user_requester', 'like', "%{$search}%");
+
                     // Also search in searchable custom fields
                     foreach ($searchableCustomFields as $customField) {
                         $q->orWhere($customField, 'like', "%{$search}%");
@@ -133,14 +133,14 @@ class ProcurementItemController extends Controller
         // Sorting - validate against whitelist to prevent SQL injection
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = strtolower($request->input('sort_dir', 'desc'));
-        
+
         if (!in_array($sortBy, self::ALLOWED_SORT_COLUMNS)) {
             $sortBy = 'created_at';
         }
         if (!in_array($sortDir, ['asc', 'desc'])) {
             $sortDir = 'desc';
         }
-        
+
         $query->orderBy($sortBy, $sortDir);
 
         // Pagination
@@ -164,7 +164,7 @@ class ProcurementItemController extends Controller
     public function show(ProcurementItem $procurementItem): JsonResponse
     {
         $this->authorize('view', $procurementItem);
-        
+
         $procurementItem->load(['department', 'buyer', 'status']);
 
         return response()->json([
@@ -194,7 +194,7 @@ class ProcurementItemController extends Controller
     public function store(StoreProcurementItemRequest $request): JsonResponse
     {
         $this->authorize('create', ProcurementItem::class);
-        
+
         $validated = $request->validated();
 
         // Map frontend field names to database column names
@@ -222,7 +222,7 @@ class ProcurementItemController extends Controller
     public function update(UpdateProcurementItemRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
         $this->authorize('update', $procurementItem);
-        
+
         $oldValues = $procurementItem->toArray();
         $user = $request->user();
         $validated = $request->validated();
@@ -234,7 +234,7 @@ class ProcurementItemController extends Controller
                 $validated['is_emergency'] = $validated['emergency'];
                 unset($validated['emergency']);
             }
-            
+
             if (isset($validated['status_id']) && $validated['status_id'] != $procurementItem->status_id) {
                 $validated['tgl_status'] = now();
             }
@@ -242,7 +242,7 @@ class ProcurementItemController extends Controller
             // AVP can only update fields they have permission to edit (from field_permissions table)
             $allowedFields = FieldPermission::getEditableFields('avp');
             $validated = array_intersect_key($validated, array_flip($allowedFields));
-            
+
             // Auto-update tgl_status when status changes
             if (isset($validated['status_id']) && $validated['status_id'] != $procurementItem->status_id) {
                 $validated['tgl_status'] = now();
@@ -273,7 +273,7 @@ class ProcurementItemController extends Controller
     public function updateStatus(UpdateStatusRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
         $this->authorize('update', $procurementItem);
-        
+
         $oldStatusId = $procurementItem->status_id;
         $oldValues = ['status_id' => $oldStatusId];
 
@@ -281,8 +281,8 @@ class ProcurementItemController extends Controller
         $newStatusId = $validated['status_id'];
 
         // Use custom date if provided, otherwise use now()
-        $changedAt = isset($validated['changed_at']) 
-            ? \Carbon\Carbon::parse($validated['changed_at']) 
+        $changedAt = isset($validated['changed_at'])
+            ? \Carbon\Carbon::parse($validated['changed_at'])
             : now();
 
         // Check for duplicate: get the last status history entry for this item
@@ -301,7 +301,7 @@ class ProcurementItemController extends Controller
         } else {
             $procurementItem->tgl_status = null;
         }
-        
+
         $procurementItem->status_id = $newStatusId;
         $procurementItem->updated_by = $request->user()->id;
         $procurementItem->save();
@@ -315,6 +315,7 @@ class ProcurementItemController extends Controller
                 'changed_by' => $request->user()->id,
                 'changed_at' => $changedAt,
                 'notes' => $validated['notes'] ?? null,
+                'event_type' => 'MANUAL',
             ]);
         }
 
@@ -363,6 +364,7 @@ class ProcurementItemController extends Controller
                     ] : null,
                     'changed_at' => $record->changed_at->toIso8601String(),
                     'notes' => $record->notes,
+                    'event_type' => $record->event_type ?? 'MANUAL',
                 ];
             });
 
@@ -397,7 +399,7 @@ class ProcurementItemController extends Controller
     public function updateBuyer(UpdateBuyerRequest $request, ProcurementItem $procurementItem): JsonResponse
     {
         $this->authorize('assignBuyer', $procurementItem);
-        
+
         $oldValues = ['buyer_id' => $procurementItem->buyer_id];
 
         $validated = $request->validated();
@@ -412,6 +414,208 @@ class ProcurementItemController extends Controller
         return response()->json([
             'message' => 'Buyer updated successfully',
             'data' => new ProcurementItemResource($procurementItem->load(['department', 'buyer', 'status'])),
+        ]);
+    }
+
+    /**
+     * Advance procurement item to next status in workflow
+     */
+    public function advance(Request $request, ProcurementItem $procurementItem): JsonResponse
+    {
+        $this->authorize('update', $procurementItem);
+
+        $validated = $request->validate([
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $coreStatuses = config('procurement_flow.core_statuses_in_order', []);
+        $terminalStatuses = config('procurement_flow.terminal', []);
+
+        // Get current status name
+        $currentStatusName = $procurementItem->status?->name;
+
+        // Cannot advance if no status set
+        if (!$currentStatusName) {
+            // Set to first status (DUR)
+            $firstStatus = \App\Models\Status::where('name', $coreStatuses[0] ?? 'DUR')->first();
+            if (!$firstStatus) {
+                return response()->json(['message' => 'Status awal tidak ditemukan'], 422);
+            }
+
+            return $this->applyStatusChange(
+                $request,
+                $procurementItem,
+                $firstStatus->id,
+                'ADVANCE',
+                $validated['notes'] ?? null
+            );
+        }
+
+        // Cannot advance from terminal status
+        if (in_array($currentStatusName, $terminalStatuses)) {
+            return response()->json([
+                'message' => 'Tidak dapat memproses item dengan status terminal: ' . $currentStatusName
+            ], 422);
+        }
+
+        // Find next status
+        $currentIndex = array_search($currentStatusName, $coreStatuses);
+        if ($currentIndex === false) {
+            return response()->json([
+                'message' => 'Status saat ini tidak ada dalam flow: ' . $currentStatusName
+            ], 422);
+        }
+
+        $nextIndex = $currentIndex + 1;
+        if ($nextIndex >= count($coreStatuses)) {
+            return response()->json([
+                'message' => 'Sudah di status terakhir'
+            ], 422);
+        }
+
+        // Skip terminal statuses in advance flow (Dibatalkan should only be reached via cancel)
+        $nextStatusName = $coreStatuses[$nextIndex];
+        if ($nextStatusName === 'Dibatalkan') {
+            $nextIndex++;
+            if ($nextIndex >= count($coreStatuses)) {
+                return response()->json(['message' => 'Sudah di status terakhir'], 422);
+            }
+            $nextStatusName = $coreStatuses[$nextIndex];
+        }
+
+        $nextStatus = \App\Models\Status::where('name', $nextStatusName)->first();
+        if (!$nextStatus) {
+            return response()->json([
+                'message' => 'Status berikutnya tidak ditemukan: ' . $nextStatusName
+            ], 422);
+        }
+
+        return $this->applyStatusChange(
+            $request,
+            $procurementItem,
+            $nextStatus->id,
+            'ADVANCE',
+            $validated['notes'] ?? null
+        );
+    }
+
+    /**
+     * Rebid action - return to DUR status
+     */
+    public function rebid(Request $request, ProcurementItem $procurementItem): JsonResponse
+    {
+        $this->authorize('update', $procurementItem);
+
+        $validated = $request->validate([
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $eligibleStatuses = config('procurement_flow.eligibility_actions.rebid', []);
+        $currentStatusName = $procurementItem->status?->name;
+
+        if (!in_array($currentStatusName, $eligibleStatuses)) {
+            return response()->json([
+                'message' => 'Rebid tidak diizinkan dari status: ' . ($currentStatusName ?? 'Tidak ada status'),
+                'allowed_statuses' => $eligibleStatuses,
+            ], 422);
+        }
+
+        $durStatus = \App\Models\Status::where('name', 'DUR')->first();
+        if (!$durStatus) {
+            return response()->json(['message' => 'Status DUR tidak ditemukan'], 422);
+        }
+
+        return $this->applyStatusChange(
+            $request,
+            $procurementItem,
+            $durStatus->id,
+            'REBID',
+            $validated['notes'] ?? 'Rebid: kembali ke DUR'
+        );
+    }
+
+
+
+    /**
+     * Cancel action - mark as Batal
+     */
+    public function cancel(Request $request, ProcurementItem $procurementItem): JsonResponse
+    {
+        $this->authorize('update', $procurementItem);
+
+        $validated = $request->validate([
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $eligibleStatuses = config('procurement_flow.eligibility_actions.cancel', []);
+        $currentStatusName = $procurementItem->status?->name;
+
+        if (!in_array($currentStatusName, $eligibleStatuses)) {
+            return response()->json([
+                'message' => 'Pembatalan tidak diizinkan dari status: ' . ($currentStatusName ?? 'Tidak ada status'),
+                'allowed_statuses' => $eligibleStatuses,
+            ], 422);
+        }
+
+        $cancelledStatus = \App\Models\Status::where('name', 'Batal')->first();
+        if (!$cancelledStatus) {
+            return response()->json(['message' => 'Status Batal tidak ditemukan'], 422);
+        }
+
+        return $this->applyStatusChange(
+            $request,
+            $procurementItem,
+            $cancelledStatus->id,
+            'CANCEL',
+            $validated['notes'] ?? 'Item dibatalkan'
+        );
+    }
+
+    /**
+     * Helper method to apply status change with history
+     */
+    private function applyStatusChange(
+        Request $request,
+        ProcurementItem $procurementItem,
+        int $newStatusId,
+        string $eventType,
+        ?string $notes = null
+    ): JsonResponse {
+        $oldStatusId = $procurementItem->status_id;
+        $changedAt = now();
+
+        // Update item
+        $procurementItem->status_id = $newStatusId;
+        $procurementItem->tgl_status = $changedAt;
+        $procurementItem->updated_by = $request->user()->id;
+        $procurementItem->save();
+
+        // Record history
+        StatusHistory::create([
+            'procurement_item_id' => $procurementItem->id,
+            'old_status_id' => $oldStatusId,
+            'new_status_id' => $newStatusId,
+            'changed_by' => $request->user()->id,
+            'changed_at' => $changedAt,
+            'notes' => $notes,
+            'event_type' => $eventType,
+        ]);
+
+        // Log activity
+        $newStatus = \App\Models\Status::find($newStatusId);
+        $this->logActivity(
+            $request,
+            $procurementItem,
+            'edited',
+            "Status diubah ke {$newStatus->name} ({$eventType}): " . $procurementItem->no_pr,
+            ['status_id' => $oldStatusId],
+            ['status_id' => $newStatusId]
+        );
+
+        return response()->json([
+            'message' => 'Status berhasil diubah',
+            'data' => new ProcurementItemResource($procurementItem->load(['department', 'buyer', 'status'])),
+            'event_type' => $eventType,
         ]);
     }
 
@@ -437,7 +641,7 @@ class ProcurementItemController extends Controller
     {
         // Generate detailed description for edits
         $detailedDescription = $description;
-        
+
         if ($eventType === 'edited' && $oldValues && $newValues) {
             $changes = $this->getDetailedChanges($oldValues, $newValues);
             if (!empty($changes)) {
@@ -463,7 +667,7 @@ class ProcurementItemController extends Controller
     private function getDetailedChanges(array $oldValues, array $newValues): array
     {
         $changes = [];
-        
+
         // Field labels for display
         $fieldLabels = [
             'no_pr' => 'No PR',
@@ -498,7 +702,7 @@ class ProcurementItemController extends Controller
             }
 
             $oldValue = $oldValues[$key] ?? null;
-            
+
             // Normalize values for comparison
             $normalizedOld = $this->normalizeValue($oldValue);
             $normalizedNew = $this->normalizeValue($newValue);
@@ -507,7 +711,7 @@ class ProcurementItemController extends Controller
                 $label = $fieldLabels[$key] ?? ucfirst(str_replace('_', ' ', $key));
                 $displayOld = $this->formatValueForDisplay($key, $oldValue);
                 $displayNew = $this->formatValueForDisplay($key, $newValue);
-                
+
                 $changes[] = "{$label} diubah dari \"{$displayOld}\" ke \"{$displayNew}\"";
             }
         }
@@ -580,8 +784,8 @@ class ProcurementItemController extends Controller
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('no_pr', 'like', "%{$search}%")
-                  ->orWhere('nama_barang', 'like', "%{$search}%")
-                  ->orWhere('user_requester', 'like', "%{$search}%");
+                    ->orWhere('nama_barang', 'like', "%{$search}%")
+                    ->orWhere('user_requester', 'like', "%{$search}%");
             });
         }
 
@@ -695,7 +899,7 @@ class ProcurementItemController extends Controller
             $sheet->setCellValue('S' . $row, $item->tgl_po?->format('d/m/Y'));
             $sheet->setCellValue('T' . $row, $item->tgl_datang?->format('d/m/Y'));
             $sheet->setCellValue('U' . $row, $item->keterangan);
-            
+
             // Add custom field values
             $colIndex = 22; // V is column 22
             foreach ($activeCustomFields as $config) {
@@ -704,7 +908,7 @@ class ProcurementItemController extends Controller
                 $sheet->setCellValue($colLetter . $row, $item->$fieldName);
                 $colIndex++;
             }
-            
+
             $row++;
         }
 

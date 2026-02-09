@@ -106,10 +106,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'show']);
     Route::post('/procurement-items', [ProcurementItemController::class, 'store']);
     Route::put('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'update']);
-    Route::patch('/procurement-items/{procurementItem}/status', [ProcurementItemController::class, 'updateStatus']);
     Route::get('/procurement-items/{procurementItem}/status-history', [ProcurementItemController::class, 'getStatusHistory']);
     Route::patch('/procurement-items/{procurementItem}/buyer', [ProcurementItemController::class, 'updateBuyer']);
-    Route::middleware('role:admin,avp')->group(function () {
+
+    // Workflow endpoints (controlled status transitions)
+    Route::post('/procurement-items/{procurementItem}/advance', [ProcurementItemController::class, 'advance']);
+    Route::post('/procurement-items/{procurementItem}/actions/rebid', [ProcurementItemController::class, 'rebid']);
+    Route::post('/procurement-items/{procurementItem}/actions/cancel', [ProcurementItemController::class, 'cancel']);
+
+    // Admin-only procurement item operations
+    Route::middleware('role:admin')->group(function () {
+        Route::patch('/procurement-items/{procurementItem}/status', [ProcurementItemController::class, 'updateStatus']);
         Route::delete('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'destroy']);
     });
 

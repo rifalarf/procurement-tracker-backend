@@ -500,7 +500,7 @@ class ProcurementItemController extends Controller
     }
 
     /**
-     * Rebid action - return to RFQ status
+     * Rebid action - return to DUR status
      */
     public function rebid(Request $request, ProcurementItem $procurementItem): JsonResponse
     {
@@ -520,57 +520,24 @@ class ProcurementItemController extends Controller
             ], 422);
         }
 
-        $rfqStatus = \App\Models\Status::where('name', 'RFQ')->first();
-        if (!$rfqStatus) {
-            return response()->json(['message' => 'Status RFQ tidak ditemukan'], 422);
+        $durStatus = \App\Models\Status::where('name', 'DUR')->first();
+        if (!$durStatus) {
+            return response()->json(['message' => 'Status DUR tidak ditemukan'], 422);
         }
 
         return $this->applyStatusChange(
             $request,
             $procurementItem,
-            $rfqStatus->id,
+            $durStatus->id,
             'REBID',
-            $validated['notes'] ?? 'Rebid: kembali ke RFQ'
+            $validated['notes'] ?? 'Rebid: kembali ke DUR'
         );
     }
 
-    /**
-     * Retender action - restart tender from RFQ
-     */
-    public function retender(Request $request, ProcurementItem $procurementItem): JsonResponse
-    {
-        $this->authorize('update', $procurementItem);
 
-        $validated = $request->validate([
-            'notes' => 'nullable|string|max:1000',
-        ]);
-
-        $eligibleStatuses = config('procurement_flow.eligibility_actions.retender', []);
-        $currentStatusName = $procurementItem->status?->name;
-
-        if (!in_array($currentStatusName, $eligibleStatuses)) {
-            return response()->json([
-                'message' => 'Retender tidak diizinkan dari status: ' . ($currentStatusName ?? 'Tidak ada status'),
-                'allowed_statuses' => $eligibleStatuses,
-            ], 422);
-        }
-
-        $rfqStatus = \App\Models\Status::where('name', 'RFQ')->first();
-        if (!$rfqStatus) {
-            return response()->json(['message' => 'Status RFQ tidak ditemukan'], 422);
-        }
-
-        return $this->applyStatusChange(
-            $request,
-            $procurementItem,
-            $rfqStatus->id,
-            'RETENDER',
-            $validated['notes'] ?? 'Retender: proses lelang ulang dari awal'
-        );
-    }
 
     /**
-     * Cancel action - mark as Dibatalkan
+     * Cancel action - mark as Batal
      */
     public function cancel(Request $request, ProcurementItem $procurementItem): JsonResponse
     {
@@ -590,9 +557,9 @@ class ProcurementItemController extends Controller
             ], 422);
         }
 
-        $cancelledStatus = \App\Models\Status::where('name', 'Dibatalkan')->first();
+        $cancelledStatus = \App\Models\Status::where('name', 'Batal')->first();
         if (!$cancelledStatus) {
-            return response()->json(['message' => 'Status Dibatalkan tidak ditemukan'], 422);
+            return response()->json(['message' => 'Status Batal tidak ditemukan'], 422);
         }
 
         return $this->applyStatusChange(

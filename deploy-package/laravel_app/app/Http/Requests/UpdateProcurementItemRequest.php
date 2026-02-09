@@ -11,11 +11,26 @@ class UpdateProcurementItemRequest extends FormRequest
         return true;
     }
 
+    /**
+     * Prepare data for validation - convert empty strings to null for optional fields
+     */
+    protected function prepareForValidation(): void
+    {
+        // Convert empty strings to null for fields that have 'in:' validation
+        // This handles both '' (empty string) and null values sent from frontend
+        $procxManual = $this->input('procx_manual');
+        if ($procxManual === '' || $procxManual === null || $procxManual === 'none') {
+            // Use getInputSource to properly remove the field from request data
+            // This prevents the 'in:' validation rule from running on this field
+            $this->getInputSource()->remove('procx_manual');
+        }
+    }
+
     public function rules(): array
     {
         $user = $this->user();
         $itemId = $this->route('procurementItem')->id ?? null;
-        
+
         // Buyers have limited fields they can update
         if ($user->role === 'buyer') {
             return [
@@ -34,7 +49,7 @@ class UpdateProcurementItemRequest extends FormRequest
                 'custom_field_5' => 'nullable|string|max:255',
             ];
         }
-        
+
         // Admins can update all fields
         return [
             'no_pr' => 'sometimes|string|max:50|unique:procurement_items,no_pr,' . $itemId,
@@ -48,7 +63,7 @@ class UpdateProcurementItemRequest extends FormRequest
             'nilai' => 'nullable|numeric|min:0',
             'department_id' => 'nullable|exists:departments,id',
             'tgl_terima_dokumen' => 'nullable|date',
-            'procx_manual' => 'nullable|in:PROCX,MANUAL',
+            'procx_manual' => 'nullable|regex:/^(PROCX|MANUAL)?$/',
             'buyer_id' => 'nullable|exists:buyers,id',
             'status_id' => 'nullable|exists:statuses,id',
             'tgl_status' => 'nullable|date',

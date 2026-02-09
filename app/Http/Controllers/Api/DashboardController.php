@@ -29,6 +29,20 @@ class DashboardController extends Controller
             $query->where('department_id', $request->department_id);
         }
 
+        // Apply buyer filter (for personalized buyer dashboard)
+        if ($request->has('buyer_id') && $request->buyer_id) {
+            $query->where('buyer_id', $request->buyer_id);
+        }
+
+        // "Hanya Saya" filter - show ONLY items assigned to current buyer via buyer.user_id
+        // (same logic as ProcurementItemController)
+        $user = auth()->user();
+        if ($request->input('only_mine') === 'true' && $user && $user->role === 'buyer') {
+            $query->whereHas('buyer', function ($buyerQuery) use ($user) {
+                $buyerQuery->where('user_id', $user->id);
+            });
+        }
+
         // Calculate KPI Cards
         $totalPr = $query->count();
         $totalNilai = (clone $query)->sum('nilai');

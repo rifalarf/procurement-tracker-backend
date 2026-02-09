@@ -18,10 +18,10 @@ return [
         'Evaluasi Teknis & Komersial',
         'Negosiasi',
         'Persetujuan Pemenang',
-        'Awarding',
-        'PO/SPK',
+        'Pengumuman Pemenang',
+        'PO / SPK',
         'Selesai',
-        'Dibatalkan',
+        'Batal',
     ],
 
     /*
@@ -35,7 +35,7 @@ return [
     */
     'terminal' => [
         'Selesai',
-        'Dibatalkan',
+        'Batal',
     ],
 
     /*
@@ -44,8 +44,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Defines which statuses allow each exception action.
-    | - rebid: Restart bidding process
-    | - retender: Full re-tender from scratch
+    | - rebid: Restart process from DUR
     | - cancel: Cancel the procurement item
     |
     */
@@ -53,13 +52,10 @@ return [
         'rebid' => [
             'RFQ',
             'Bid Open',
-        ],
-        'retender' => [
-            'Bid Open',
             'Evaluasi Teknis & Komersial',
             'Negosiasi',
             'Persetujuan Pemenang',
-            'Awarding',
+            'Pengumuman Pemenang',
         ],
         'cancel' => [
             'DUR',
@@ -68,8 +64,8 @@ return [
             'Evaluasi Teknis & Komersial',
             'Negosiasi',
             'Persetujuan Pemenang',
-            'Awarding',
-            'PO/SPK',
+            'Pengumuman Pemenang',
+            'PO / SPK',
         ],
     ],
 
@@ -83,19 +79,37 @@ return [
     |
     */
     'legacy_status_mapping' => [
+        // Evaluation phase mappings
         'Konfirmasi Spesifikasi' => 'Evaluasi Teknis & Komersial',
         'Konfirmasi Anggaran' => 'Evaluasi Teknis & Komersial',
+
+        // Negotiation phase mappings
         'App. Nego' => 'Negosiasi',
         'Auction' => 'Negosiasi',
-        'Approval PO' => 'PO/SPK',
-        'PO' => 'PO/SPK',
-        'TTD PO' => 'PO/SPK',
-        'LOI/Belum PO' => 'PO/SPK',
-        'SPK' => 'PO/SPK',
-        'TTD SPK' => 'PO/SPK',
-        'Rebid' => 'RFQ',
-        'PR Dibatalkan' => 'Dibatalkan',
-        'PO dibatalkan' => 'Dibatalkan',
+
+        // Awarding phase mappings
+        'Awarding' => 'Persetujuan Pemenang',
+        'Persetujuan Pemenang' => 'Persetujuan Pemenang',
+
+        // PO phase mappings
+        'Approval PO' => 'PO / SPK',
+        'PO' => 'PO / SPK',
+        'TTD PO' => 'PO / SPK',
+        'LOI/Belum PO' => 'PO / SPK',
+        'SPK' => 'PO / SPK',
+        'TTD SPK' => 'PO / SPK',
+        'PO/SPK' => 'PO / SPK',
+
+        // Rebid/Retender → DUR
+        'Rebid' => 'DUR',
+        'Retender' => 'DUR',
+
+        // Cancelled status mappings
+        'PR Dibatalkan' => 'Batal',
+        'PO dibatalkan' => 'Batal',
+        'Dibatalkan' => 'Batal',
+
+        // Return to DUR
         'PR dikembalikan ke PPP untuk di proses di PI' => 'DUR',
     ],
 
@@ -110,8 +124,7 @@ return [
     'event_types' => [
         'MANUAL',     // Manual status change (admin override)
         'ADVANCE',    // Normal flow progression
-        'REBID',      // Rebid action
-        'RETENDER',   // Retender action
+        'REBID',      // Rebid action (return to DUR)
         'CANCEL',     // Cancel action
         'MIGRATION',  // Data migration
     ],

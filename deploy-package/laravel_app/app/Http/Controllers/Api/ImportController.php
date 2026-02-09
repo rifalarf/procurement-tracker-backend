@@ -66,25 +66,25 @@ class ImportController extends Controller
         $file = $request->file('file');
         $originalFilename = $file->getClientOriginalName();
         $filename = uniqid() . '_' . $originalFilename;
-        
+
         // Store file temporarily
         $path = $file->storeAs('imports', $filename, 'local');
-        
+
         try {
             // Read Excel file
             $spreadsheet = IOFactory::load(Storage::disk('local')->path($path));
             $worksheet = $spreadsheet->getActiveSheet();
             $rows = $this->worksheetToRawArray($worksheet);
-            
+
             if (empty($rows)) {
                 Storage::disk('local')->delete($path);
                 return response()->json(['message' => 'File is empty'], 422);
             }
-            
+
             // Get headers from first row
             $headers = array_map('trim', $rows[0]);
             $totalRows = count($rows) - 1; // Exclude header row
-            
+
             // Create import session
             $session = ImportSession::create([
                 'filename' => $filename,
@@ -94,15 +94,16 @@ class ImportController extends Controller
                 'status' => 'pending',
                 'created_by' => auth()->id(),
             ]);
-            
+
             // Create column mappings with auto-detection
             foreach ($headers as $index => $header) {
-                if (empty($header)) continue;
-                
+                if (empty($header))
+                    continue;
+
                 $databaseField = $this->autoDetectField($header);
                 $sampleData = $this->getSampleData($rows, $index);
                 $confidence = $databaseField ? $this->calculateConfidence($header, $databaseField) : 0;
-                
+
                 ImportMapping::create([
                     'import_session_id' => $session->id,
                     'excel_column' => $header,
@@ -111,14 +112,14 @@ class ImportController extends Controller
                     'confidence_score' => $confidence,
                 ]);
             }
-            
+
             return response()->json([
                 'message' => 'File uploaded successfully',
                 'session_id' => $session->id,
                 'total_rows' => $totalRows,
                 'columns_detected' => count(array_filter($headers)),
             ]);
-            
+
         } catch (\Exception $e) {
             Storage::disk('local')->delete($path);
             return response()->json(['message' => 'Failed to parse Excel file: ' . $e->getMessage()], 422);
@@ -131,7 +132,7 @@ class ImportController extends Controller
     public function getSession(int $id): JsonResponse
     {
         $session = ImportSession::with('mappings')->findOrFail($id);
-        
+
         return response()->json([
             'session' => $session,
             'available_fields' => $this->getAvailableFields(),
@@ -144,19 +145,19 @@ class ImportController extends Controller
     public function updateMapping(Request $request, int $id): JsonResponse
     {
         $session = ImportSession::findOrFail($id);
-        
+
         $request->validate([
             'mappings' => 'required|array',
             'mappings.*.id' => 'required|exists:import_mappings,id',
             'mappings.*.database_field' => 'nullable|string',
         ]);
-        
+
         foreach ($request->mappings as $mapping) {
             ImportMapping::where('id', $mapping['id'])
                 ->where('import_session_id', $session->id)
                 ->update(['database_field' => $mapping['database_field']]);
         }
-        
+
         return response()->json(['message' => 'Mappings updated successfully']);
     }
 
@@ -166,35 +167,35 @@ class ImportController extends Controller
     public function preview(int $id): JsonResponse
     {
         $session = ImportSession::with('mappings')->findOrFail($id);
-        
+
         $filePath = Storage::disk('local')->path('imports/' . $session->filename);
-        
+
         if (!file_exists($filePath)) {
             return response()->json(['message' => 'File not found'], 404);
         }
-        
+
         try {
             $spreadsheet = IOFactory::load($filePath);
             $worksheet = $spreadsheet->getActiveSheet();
             $rows = $this->worksheetToRawArray($worksheet);
-            
+
             $headers = array_map('trim', $rows[0]);
             $mappings = $session->mappings->keyBy('excel_column');
-            
+
             $previewData = [];
             $validRows = 0;
             $skippedRows = 0;
-            
+
             // Preview first 10 rows
             $previewLimit = min(count($rows), 11); // Header + 10 data rows
-            
+
             for ($i = 1; $i < $previewLimit; $i++) {
                 $row = $rows[$i];
                 $rowData = $this->mapRowToFields($row, $headers, $mappings);
-                
+
                 $status = 'valid';
                 $errors = [];
-                
+
                 // Check required fields
                 foreach ($this->requiredFields as $field) {
                     if (empty($rowData[$field])) {
@@ -202,13 +203,13 @@ class ImportController extends Controller
                         $errors[] = "Missing required field: $field";
                     }
                 }
-                
+
                 if ($status === 'valid') {
                     $validRows++;
                 } elseif ($status === 'skip') {
                     $skippedRows++;
                 }
-                
+
                 $previewData[] = [
                     'row_number' => $i,
                     'data' => $rowData,
@@ -216,7 +217,7 @@ class ImportController extends Controller
                     'errors' => $errors,
                 ];
             }
-            
+
             return response()->json([
                 'preview' => $previewData,
                 'summary' => [
@@ -227,7 +228,7 @@ class ImportController extends Controller
                 ],
                 'mappings' => $session->mappings,
             ]);
-            
+
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to preview: ' . $e->getMessage()], 422);
         }
@@ -239,45 +240,45 @@ class ImportController extends Controller
     public function execute(int $id): JsonResponse
     {
         $session = ImportSession::with('mappings')->findOrFail($id);
-        
+
         if ($session->status !== 'pending') {
             return response()->json(['message' => 'Import already processed'], 422);
         }
-        
+
         $filePath = Storage::disk('local')->path('imports/' . $session->filename);
-        
+
         if (!file_exists($filePath)) {
             return response()->json(['message' => 'File not found'], 404);
         }
-        
+
         try {
             $session->update(['status' => 'processing']);
-            
+
             $spreadsheet = IOFactory::load($filePath);
             $worksheet = $spreadsheet->getActiveSheet();
             $rows = $this->worksheetToRawArray($worksheet);
-            
+
             $headers = array_map('trim', $rows[0]);
             $mappings = $session->mappings->keyBy('excel_column');
-            
+
             // Cache for lookups
             $departments = Department::pluck('id', 'name')->toArray();
             $buyers = Buyer::pluck('id', 'name')->toArray();
             $statuses = Status::pluck('id', 'name')->toArray();
-            
+
             $successCount = 0;
             $errorCount = 0;
             $skippedCount = 0;
             $updatedCount = 0;
             $errors = [];
             $importLog = [];
-            
+
             DB::beginTransaction();
-            
+
             for ($i = 1; $i < count($rows); $i++) {
                 $row = $rows[$i];
                 $rowData = $this->mapRowToFields($row, $headers, $mappings);
-                
+
                 // Skip if missing required fields
                 $missingRequired = false;
                 foreach ($this->requiredFields as $field) {
@@ -286,46 +287,46 @@ class ImportController extends Controller
                         break;
                     }
                 }
-                
+
                 if ($missingRequired) {
                     $skippedCount++;
                     continue;
                 }
-                
 
-                
+
+
                 try {
                     // Resolve lookups
                     $rowData = $this->resolveLookups($rowData, $departments, $buyers, $statuses);
-                    
+
                     // Parse dates
                     $rowData = $this->parseDates($rowData);
-                    
+
                     // Parse special fields
                     $rowData = $this->parseSpecialFields($rowData);
-                    
+
                     // Add metadata
                     $rowData['created_by'] = auth()->id();
-                    
+
                     $noPr = $rowData['no_pr'];
                     $namaBarang = $rowData['nama_barang'] ?? null;
-                    
+
                     // Check if item with same NO PR + nama_barang exists
                     // This is the unique key combination
                     $existingItem = ProcurementItem::where('no_pr', $noPr)
                         ->where('nama_barang', $namaBarang)
                         ->first();
-                    
+
                     if ($existingItem) {
                         // Same NO PR + same item → UPDATE existing row
                         // Remove created_by from update data (keep original creator)
                         unset($rowData['created_by']);
                         $rowData['updated_by'] = auth()->id();
-                        
+
                         // Keep original no_pr and version
                         unset($rowData['no_pr']);
                         unset($rowData['version']);
-                        
+
                         $existingItem->update($rowData);
                         $updatedCount++;
                         $importLog[] = [
@@ -340,12 +341,12 @@ class ImportController extends Controller
                     } else {
                         // NO PR exists but different item, OR first occurrence
                         // → INSERT new row
-                        
+
                         // Count existing items with same NO PR to determine version/sequence
                         // Version 1 = first item (no badge), Version 2+ = badge number
                         $existingCount = ProcurementItem::where('no_pr', $noPr)->count();
                         $rowData['version'] = $existingCount + 1;
-                        
+
                         $successCount++;
                         $newItem = ProcurementItem::create($rowData);
                         $importLog[] = [
@@ -357,7 +358,7 @@ class ImportController extends Controller
                             'new_id' => $newItem->id,
                         ];
                     }
-                    
+
                 } catch (\Exception $e) {
                     $errorCount++;
                     $errors[] = "Row $i: " . $e->getMessage();
@@ -369,9 +370,9 @@ class ImportController extends Controller
                     ];
                 }
             }
-            
+
             DB::commit();
-            
+
             // Update session
             $session->update([
                 'status' => 'completed',
@@ -379,7 +380,7 @@ class ImportController extends Controller
                 'success_rows' => $successCount + $updatedCount,
                 'error_rows' => $errorCount,
             ]);
-            
+
             // Log activity
             ActivityLog::create([
                 'user_id' => auth()->id(),
@@ -398,10 +399,10 @@ class ImportController extends Controller
                 'ip_address' => request()->ip(),
                 'user_agent' => request()->userAgent(),
             ]);
-            
+
             // Clean up file
             Storage::disk('local')->delete('imports/' . $session->filename);
-            
+
             // Log to file for debugging
             $logContent = "=== IMPORT LOG ===" . PHP_EOL;
             $logContent .= "Session ID: {$session->id}" . PHP_EOL;
@@ -411,16 +412,21 @@ class ImportController extends Controller
             foreach ($importLog as $log) {
                 $logContent .= "[Row {$log['row']}] {$log['action']}";
                 $logContent .= " | No PR: {$log['no_pr']}";
-                if (isset($log['nama_barang'])) $logContent .= " | Item: {$log['nama_barang']}";
-                if (isset($log['version'])) $logContent .= " | Version: {$log['version']}";
-                if (isset($log['new_id'])) $logContent .= " | ID: {$log['new_id']}";
-                if (isset($log['reason'])) $logContent .= " | Reason: {$log['reason']}";
-                if (isset($log['error'])) $logContent .= " | Error: {$log['error']}";
+                if (isset($log['nama_barang']))
+                    $logContent .= " | Item: {$log['nama_barang']}";
+                if (isset($log['version']))
+                    $logContent .= " | Version: {$log['version']}";
+                if (isset($log['new_id']))
+                    $logContent .= " | ID: {$log['new_id']}";
+                if (isset($log['reason']))
+                    $logContent .= " | Reason: {$log['reason']}";
+                if (isset($log['error']))
+                    $logContent .= " | Error: {$log['error']}";
                 $logContent .= PHP_EOL;
             }
-            
+
             Storage::disk('local')->put('import_logs/import_' . $session->id . '.log', $logContent);
-            
+
             return response()->json([
                 'message' => 'Import completed',
                 'success_count' => $successCount,
@@ -430,7 +436,7 @@ class ImportController extends Controller
                 'errors' => array_slice($errors, 0, 10), // Return first 10 errors
                 'log' => $importLog, // Include log in response
             ]);
-            
+
         } catch (\Exception $e) {
             DB::rollBack();
             $session->update(['status' => 'failed']);
@@ -445,11 +451,11 @@ class ImportController extends Controller
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        
+
         // Set headers
         $headers = array_keys($this->columnMapping);
         $sheet->fromArray($headers, null, 'A1');
-        
+
         // Add example data
         $exampleData = [
             'PR-001',           // NO PR
@@ -474,7 +480,7 @@ class ImportController extends Controller
             'Keterangan contoh', // Keterangan
         ];
         $sheet->fromArray($exampleData, null, 'A2');
-        
+
         // Style header row
         $sheet->getStyle('A1:T1')->applyFromArray([
             'font' => ['bold' => true],
@@ -483,14 +489,14 @@ class ImportController extends Controller
                 'startColor' => ['rgb' => 'E2E8F0'],
             ],
         ]);
-        
+
         // Auto-size columns
         foreach (range('A', 'T') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-        
+
         $writer = new Xlsx($spreadsheet);
-        
+
         return response()->streamDownload(function () use ($writer) {
             $writer->save('php://output');
         }, 'import_template.xlsx', [
@@ -504,28 +510,30 @@ class ImportController extends Controller
     private function autoDetectField(string $header): ?string
     {
         $header = trim($header);
-        
+
         // Exact match
         if (isset($this->columnMapping[$header])) {
             return $this->columnMapping[$header];
         }
-        
+
         // Case-insensitive match
         foreach ($this->columnMapping as $excelHeader => $dbField) {
             if (strtolower($header) === strtolower($excelHeader)) {
                 return $dbField;
             }
         }
-        
+
         // Partial match
         $headerLower = strtolower($header);
         foreach ($this->columnMapping as $excelHeader => $dbField) {
-            if (str_contains($headerLower, strtolower($excelHeader)) ||
-                str_contains(strtolower($excelHeader), $headerLower)) {
+            if (
+                str_contains($headerLower, strtolower($excelHeader)) ||
+                str_contains(strtolower($excelHeader), $headerLower)
+            ) {
                 return $dbField;
             }
         }
-        
+
         return null;
     }
 
@@ -548,7 +556,7 @@ class ImportController extends Controller
     private function calculateConfidence(string $header, string $dbField): int
     {
         $header = strtolower(trim($header));
-        
+
         foreach ($this->columnMapping as $excelHeader => $field) {
             if ($field === $dbField) {
                 if (strtolower($excelHeader) === $header) {
@@ -560,7 +568,7 @@ class ImportController extends Controller
                 return 60;
             }
         }
-        
+
         return 50;
     }
 
@@ -612,17 +620,18 @@ class ImportController extends Controller
     private function mapRowToFields(array $row, array $headers, $mappings): array
     {
         $data = [];
-        
+
         foreach ($headers as $index => $header) {
-            if (empty($header)) continue;
-            
+            if (empty($header))
+                continue;
+
             $mapping = $mappings->get($header);
             if ($mapping && $mapping->database_field) {
                 $value = $row[$index] ?? null;
                 $data[$mapping->database_field] = is_string($value) ? trim($value) : $value;
             }
         }
-        
+
         return $data;
     }
 
@@ -635,7 +644,7 @@ class ImportController extends Controller
         if (isset($data['department_id']) && $data['department_id'] !== null && $data['department_id'] !== '' && !is_numeric($data['department_id'])) {
             $deptName = $data['department_id'];
             $data['department_id'] = $departments[$deptName] ?? null;
-            
+
             // Try case-insensitive match
             if (!$data['department_id']) {
                 foreach ($departments as $name => $id) {
@@ -649,7 +658,7 @@ class ImportController extends Controller
             // Empty or null department_id - set to null explicitly
             $data['department_id'] = null;
         }
-        
+
         // Resolve buyer
         if (isset($data['buyer_id']) && $data['buyer_id'] !== null && $data['buyer_id'] !== '') {
             if (is_numeric($data['buyer_id'])) {
@@ -666,7 +675,7 @@ class ImportController extends Controller
                 // String buyer name - resolve by name
                 $buyerName = $data['buyer_id'];
                 $data['buyer_id'] = $buyers[$buyerName] ?? null;
-                
+
                 if (!$data['buyer_id']) {
                     foreach ($buyers as $name => $id) {
                         if (strtolower($name) === strtolower($buyerName)) {
@@ -680,12 +689,19 @@ class ImportController extends Controller
             // Empty or null buyer_id - set to null explicitly
             $data['buyer_id'] = null;
         }
-        
+
         // Resolve status
         if (isset($data['status_id']) && $data['status_id'] !== null && $data['status_id'] !== '' && !is_numeric($data['status_id'])) {
             $statusName = $data['status_id'];
+
+            // Apply legacy status alias mapping from config
+            $legacyMapping = config('procurement_flow.legacy_status_mapping', []);
+            if (isset($legacyMapping[$statusName])) {
+                $statusName = $legacyMapping[$statusName];
+            }
+
             $data['status_id'] = $statuses[$statusName] ?? null;
-            
+
             if (!$data['status_id']) {
                 foreach ($statuses as $name => $id) {
                     if (strtolower($name) === strtolower($statusName)) {
@@ -698,7 +714,7 @@ class ImportController extends Controller
             // Empty or null status_id - set to null explicitly
             $data['status_id'] = null;
         }
-        
+
         return $data;
     }
 
@@ -708,13 +724,13 @@ class ImportController extends Controller
     private function parseDates(array $data): array
     {
         $dateFields = ['tgl_terima_dokumen', 'tgl_status', 'tgl_po', 'tgl_datang'];
-        
+
         foreach ($dateFields as $field) {
             if (!empty($data[$field])) {
                 $data[$field] = $this->parseDate($data[$field]);
             }
         }
-        
+
         return $data;
     }
 
@@ -726,7 +742,7 @@ class ImportController extends Controller
         if (empty($value)) {
             return null;
         }
-        
+
         // If it's a numeric value (Excel serial date)
         if (is_numeric($value)) {
             try {
@@ -736,7 +752,7 @@ class ImportController extends Controller
                 return null;
             }
         }
-        
+
         // Try parsing as string
         try {
             $date = Carbon::parse($value);
@@ -757,29 +773,29 @@ class ImportController extends Controller
         } else {
             $data['is_emergency'] = null;
         }
-        
+
         // Parse qty - default to 0 if not set
         if (isset($data['qty']) && $data['qty'] !== null && $data['qty'] !== '') {
             $data['qty'] = (int) $data['qty'];
         } else {
             $data['qty'] = 0;
         }
-        
+
         // Parse nilai - default to 0 if not set
         if (isset($data['nilai']) && $data['nilai'] !== null && $data['nilai'] !== '') {
             $nilai = (string) $data['nilai'];
-            
+
             // Check if it's already a plain number (from Excel numeric cell)
             if (is_numeric($data['nilai'])) {
                 $data['nilai'] = (float) $data['nilai'];
             } else {
                 // Handle Indonesian format: dots as thousand separators, comma as decimal
                 // e.g., "568.453.820" or "1.234.567,89"
-                
+
                 // Count dots and commas to determine format
                 $dotCount = substr_count($nilai, '.');
                 $commaCount = substr_count($nilai, ',');
-                
+
                 if ($dotCount > 1 || ($dotCount >= 1 && $commaCount == 0)) {
                     // Indonesian format: dots are thousand separators
                     // Remove all dots (thousand separators)
@@ -790,14 +806,14 @@ class ImportController extends Controller
                     // US/International format: commas are thousand separators, dot is decimal
                     $nilai = str_replace(',', '', $nilai);
                 }
-                
+
                 // Remove any remaining non-numeric characters except dot
                 $data['nilai'] = (float) preg_replace('/[^0-9.]/', '', $nilai);
             }
         } else {
             $data['nilai'] = 0;
         }
-        
+
         return $data;
     }
 
@@ -810,7 +826,7 @@ class ImportController extends Controller
         $highestRow = $worksheet->getHighestRow();
         $highestColumnLetter = $worksheet->getHighestColumn();
         $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumnLetter);
-        
+
         $rows = [];
         for ($row = 1; $row <= $highestRow; $row++) {
             $rowData = [];
@@ -818,18 +834,18 @@ class ImportController extends Controller
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
                 $cell = $worksheet->getCell($colLetter . $row);
                 $value = $cell->getValue();
-                
+
                 // Convert numeric values to string (especially for No PR which might be formatted as time)
                 if (is_numeric($value)) {
                     // This handles cases where Excel formats the number as time
                     $value = (string) intval($value);
                 }
-                
+
                 $rowData[] = $value;
             }
             $rows[] = $rowData;
         }
-        
+
         return $rows;
     }
 }

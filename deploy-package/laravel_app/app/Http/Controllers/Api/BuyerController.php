@@ -20,7 +20,7 @@ class BuyerController extends Controller
     {
         $buyers = Buyer::where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'color', 'is_active', 'user_id']);
+            ->get(['id', 'name', 'color', 'text_color', 'is_active', 'user_id']);
 
         return response()->json([
             'data' => $buyers,
@@ -80,7 +80,7 @@ class BuyerController extends Controller
         DB::transaction(function () use ($buyer, $validated) {
             // Update buyer record
             $buyer->update($validated);
-            
+
             // Also update linked user if exists
             if ($buyer->user_id && $buyer->user) {
                 $buyer->user->update([
@@ -105,7 +105,7 @@ class BuyerController extends Controller
         DB::transaction(function () use ($buyer) {
             // Deactivate buyer
             $buyer->update(['is_active' => false]);
-            
+
             // Also deactivate linked user if exists
             if ($buyer->user_id && $buyer->user) {
                 $buyer->user->update(['is_active' => false]);
