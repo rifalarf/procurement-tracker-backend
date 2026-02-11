@@ -15,6 +15,8 @@ class DepartmentSeeder extends Seeder
             ['name' => 'PJDP', 'description' => 'Pengelola Jasa dan Dana Pensiun'],
             ['name' => 'VM', 'description' => 'Vendor Management'],
             ['name' => 'VME', 'description' => 'Vendor Management Elektrik'],
+            ['name' => 'Dep. PBJ', 'description' => 'Departemen Pengadaan Barang & Jasa'],
+            ['name' => 'Staff', 'description' => 'Staff'],
         ];
 
         foreach ($departments as $dept) {
