@@ -473,9 +473,9 @@ class ProcurementItemController extends Controller
             ], 422);
         }
 
-        // Skip terminal statuses in advance flow (Dibatalkan should only be reached via cancel)
+        // Skip terminal statuses in advance flow (Batal should only be reached via cancel)
         $nextStatusName = $coreStatuses[$nextIndex];
-        if ($nextStatusName === 'Dibatalkan') {
+        if (in_array($nextStatusName, $terminalStatuses) && $nextStatusName !== 'Selesai') {
             $nextIndex++;
             if ($nextIndex >= count($coreStatuses)) {
                 return response()->json(['message' => 'Sudah di status terakhir'], 422);
@@ -504,7 +504,7 @@ class ProcurementItemController extends Controller
      */
     public function rebid(Request $request, ProcurementItem $procurementItem): JsonResponse
     {
-        $this->authorize('update', $procurementItem);
+        $this->authorize('rebid', $procurementItem);
 
         $validated = $request->validate([
             'notes' => 'nullable|string|max:1000',
@@ -525,6 +525,9 @@ class ProcurementItemController extends Controller
             return response()->json(['message' => 'Status DUR tidak ditemukan'], 422);
         }
 
+        // Increment version to track rebid count
+        $procurementItem->increment('version');
+
         return $this->applyStatusChange(
             $request,
             $procurementItem,
@@ -541,7 +544,7 @@ class ProcurementItemController extends Controller
      */
     public function cancel(Request $request, ProcurementItem $procurementItem): JsonResponse
     {
-        $this->authorize('update', $procurementItem);
+        $this->authorize('cancel', $procurementItem);
 
         $validated = $request->validate([
             'notes' => 'nullable|string|max:1000',
@@ -780,12 +783,18 @@ class ProcurementItemController extends Controller
     {
         $query = ProcurementItem::with(['department', 'buyer', 'status']);
 
-        // Apply same filters as index()
+        // Apply same filters as index() - including mat_code and custom fields
         if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
+            $searchableCustomFields = CustomFieldConfig::getSearchableFieldNames();
+            $query->where(function ($q) use ($search, $searchableCustomFields) {
                 $q->where('no_pr', 'like', "%{$search}%")
+                    ->orWhere('mat_code', 'like', "%{$search}%")
                     ->orWhere('nama_barang', 'like', "%{$search}%")
                     ->orWhere('user_requester', 'like', "%{$search}%");
+
+                foreach ($searchableCustomFields as $customField) {
+                    $q->orWhere($customField, 'like', "%{$search}%");
+                }
             });
         }
 
@@ -805,14 +814,30 @@ class ProcurementItemController extends Controller
             $query->where('user_requester', 'like', "%{$user}%");
         }
 
+        // Apply date range filter
+        if ($request->has('start_date') && $request->start_date) {
+            $query->whereDate('tgl_terima_dokumen', '>=', $request->start_date);
+        }
+        if ($request->has('end_date') && $request->end_date) {
+            $query->whereDate('tgl_terima_dokumen', '<=', $request->end_date);
+        }
+
         // "Hanya Saya" filter - show ONLY items assigned to current buyer
-        // Does NOT include unassigned items
         $currentUser = auth()->user();
         if ($request->input('only_mine') === 'true' && $currentUser && $currentUser->role === 'buyer') {
-            // Only items assigned to this buyer (via buyer relationship -> user_id)
             $query->whereHas('buyer', function ($buyerQuery) use ($currentUser) {
                 $buyerQuery->where('user_id', $currentUser->id);
             });
+        }
+
+        // AVP can only export items from their assigned departments
+        if ($currentUser && $currentUser->role === 'avp') {
+            $departmentIds = $currentUser->departments()->pluck('departments.id')->toArray();
+            if (!empty($departmentIds)) {
+                $query->whereIn('department_id', $departmentIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         }
 
         // Get all items (no pagination for export)

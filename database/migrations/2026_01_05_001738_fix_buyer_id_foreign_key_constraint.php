@@ -15,16 +15,29 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Step 1: Check if foreign key exists and drop it
-        $fkExists = DB::select("
-            SELECT CONSTRAINT_NAME 
-            FROM information_schema.TABLE_CONSTRAINTS 
-            WHERE TABLE_NAME = 'procurement_items' 
-            AND CONSTRAINT_NAME = 'procurement_items_buyer_id_foreign'
-            AND CONSTRAINT_TYPE = 'FOREIGN KEY'
-        ");
-        
-        if (!empty($fkExists)) {
+        if (!Schema::hasTable('procurement_items')) {
+            return;
+        }
+
+        // Step 1: Drop existing FK if present (works across drivers, avoids information_schema on SQLite)
+        $connection = Schema::getConnection();
+        $hasFk = false;
+
+        try {
+            $foreignKeys = $connection
+                ->getDoctrineSchemaManager()
+                ->listTableForeignKeys('procurement_items');
+
+            $hasFk = collect($foreignKeys)
+                ->contains(function ($fk) {
+                    return method_exists($fk, 'getName')
+                        && $fk->getName() === 'procurement_items_buyer_id_foreign';
+                });
+        } catch (\Throwable $e) {
+            // On drivers that cannot introspect (or Doctrine missing), skip FK drop attempt safely
+        }
+
+        if ($hasFk) {
             Schema::table('procurement_items', function (Blueprint $table) {
                 $table->dropForeign(['buyer_id']);
             });
@@ -66,16 +79,29 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (!Schema::hasTable('procurement_items')) {
+            return;
+        }
+
         // Remove the buyers FK if exists
-        $fkExists = DB::select("
-            SELECT CONSTRAINT_NAME 
-            FROM information_schema.TABLE_CONSTRAINTS 
-            WHERE TABLE_NAME = 'procurement_items' 
-            AND CONSTRAINT_NAME = 'procurement_items_buyer_id_foreign'
-            AND CONSTRAINT_TYPE = 'FOREIGN KEY'
-        ");
-        
-        if (!empty($fkExists)) {
+        $connection = Schema::getConnection();
+        $hasFk = false;
+
+        try {
+            $foreignKeys = $connection
+                ->getDoctrineSchemaManager()
+                ->listTableForeignKeys('procurement_items');
+
+            $hasFk = collect($foreignKeys)
+                ->contains(function ($fk) {
+                    return method_exists($fk, 'getName')
+                        && $fk->getName() === 'procurement_items_buyer_id_foreign';
+                });
+        } catch (\Throwable $e) {
+            // Skip drop if introspection fails
+        }
+
+        if ($hasFk) {
             Schema::table('procurement_items', function (Blueprint $table) {
                 $table->dropForeign(['buyer_id']);
             });

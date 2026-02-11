@@ -58,6 +58,50 @@ class ProcurementItemPolicy
     }
 
     /**
+     * Determine if user can rebid the item
+     * More restrictive than general update — staff cannot rebid
+     */
+    public function rebid(User $user, ProcurementItem $item): bool
+    {
+        if (in_array($user->role, ['admin', 'avp'])) {
+            return true;
+        }
+
+        // Buyer can rebid unassigned items or their own assigned items
+        if ($user->role === 'buyer') {
+            if ($item->buyer_id === null) {
+                return true;
+            }
+            $buyer = $item->buyer;
+            return $buyer && $buyer->user_id === $user->id;
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine if user can cancel the item
+     * More restrictive than general update — staff cannot cancel
+     */
+    public function cancel(User $user, ProcurementItem $item): bool
+    {
+        if (in_array($user->role, ['admin', 'avp'])) {
+            return true;
+        }
+
+        // Buyer can cancel unassigned items or their own assigned items
+        if ($user->role === 'buyer') {
+            if ($item->buyer_id === null) {
+                return true;
+            }
+            $buyer = $item->buyer;
+            return $buyer && $buyer->user_id === $user->id;
+        }
+
+        return false;
+    }
+
+    /**
      * Determine if user can assign/change buyer of the item
      */
     public function assignBuyer(User $user, ProcurementItem $item): bool

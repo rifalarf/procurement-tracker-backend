@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\Buyer;
 use App\Models\Department;
 use App\Models\Status;
 use App\Models\ProcurementItem;
@@ -15,6 +16,7 @@ class ProcurementItemControllerTest extends TestCase
 
     protected User $admin;
     protected User $buyer;
+    protected Buyer $buyerRecord;
     protected Department $department;
     protected Status $status;
 
@@ -47,6 +49,12 @@ class ProcurementItemControllerTest extends TestCase
             'email' => 'buyer@example.com',
             'password' => bcrypt('password'),
             'role' => 'buyer',
+        ]);
+
+        $this->buyerRecord = Buyer::create([
+            'name' => 'Buyer User',
+            'code' => 'BYR',
+            'user_id' => $this->buyer->id,
         ]);
     }
 
@@ -169,15 +177,17 @@ class ProcurementItemControllerTest extends TestCase
             'no_pr' => 'PR-BUYER',
             'nama_barang' => 'Original Name',
             'department_id' => $this->department->id,
-            'buyer_id' => $this->buyer->id,
+            'buyer_id' => $this->buyerRecord->id,
             'created_by' => $this->admin->id,
         ]);
 
-        // Buyer should be able to update status, pg, keterangan
+        // Buyer should be able to update allowed buyer fields (status, PO info)
         $response = $this->actingAs($this->buyer, 'sanctum')
             ->putJson("/api/procurement-items/{$item->id}", [
                 'status_id' => $this->status->id,
-                'pg' => 'Test PG',
+                'no_po' => 'PO-123',
+                'nama_vendor' => 'Vendor A',
+                // Should be ignored for buyers
                 'keterangan' => 'Test Note',
             ]);
 
@@ -185,8 +195,15 @@ class ProcurementItemControllerTest extends TestCase
 
         $this->assertDatabaseHas('procurement_items', [
             'id' => $item->id,
-            'pg' => 'Test PG',
-            'keterangan' => 'Test Note',
+            'status_id' => $this->status->id,
+            'no_po' => 'PO-123',
+            'nama_vendor' => 'Vendor A',
+        ]);
+
+        // Fields not allowed for buyer should remain unchanged
+        $this->assertDatabaseHas('procurement_items', [
+            'id' => $item->id,
+            'keterangan' => null,
         ]);
     }
 

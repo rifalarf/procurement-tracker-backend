@@ -17,7 +17,7 @@ return [
         'Bid Open',
         'Evaluasi Teknis & Komersial',
         'Negosiasi',
-        'Persetujuan Pemenang',
+        'Awarding',
         'Pengumuman Pemenang',
         'PO / SPK',
         'Selesai',
@@ -54,7 +54,7 @@ return [
             'Bid Open',
             'Evaluasi Teknis & Komersial',
             'Negosiasi',
-            'Persetujuan Pemenang',
+            'Awarding',
             'Pengumuman Pemenang',
         ],
         'cancel' => [
@@ -63,7 +63,7 @@ return [
             'Bid Open',
             'Evaluasi Teknis & Komersial',
             'Negosiasi',
-            'Persetujuan Pemenang',
+            'Awarding',
             'Pengumuman Pemenang',
             'PO / SPK',
         ],
@@ -88,8 +88,8 @@ return [
         'Auction' => 'Negosiasi',
 
         // Awarding phase mappings
-        'Awarding' => 'Persetujuan Pemenang',
-        'Persetujuan Pemenang / Awarding' => 'Persetujuan Pemenang',
+        'Persetujuan Pemenang' => 'Awarding',
+        'Persetujuan Pemenang / Awarding' => 'Awarding',
 
         // PO phase mappings
         'Approval PO' => 'PO / SPK',

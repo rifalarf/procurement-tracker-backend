@@ -17,7 +17,7 @@ class StatusSeeder extends Seeder
             ['name' => 'Bid Open', 'bg_color' => '#fef9c3', 'text_color' => '#854d0e', 'sort_order' => 3, 'is_active' => true],
             ['name' => 'Evaluasi Teknis & Komersial', 'bg_color' => '#dbeafe', 'text_color' => '#1e40af', 'sort_order' => 4, 'is_active' => true],
             ['name' => 'Negosiasi', 'bg_color' => '#f3e8ff', 'text_color' => '#6b21a8', 'sort_order' => 5, 'is_active' => true],
-            ['name' => 'Persetujuan Pemenang', 'bg_color' => '#dcfce7', 'text_color' => '#166534', 'sort_order' => 6, 'is_active' => true],
+            ['name' => 'Awarding', 'bg_color' => '#dcfce7', 'text_color' => '#166534', 'sort_order' => 6, 'is_active' => true],
             ['name' => 'Pengumuman Pemenang', 'bg_color' => '#d1fae5', 'text_color' => '#065f46', 'sort_order' => 7, 'is_active' => true],
             ['name' => 'PO / SPK', 'bg_color' => '#bfdbfe', 'text_color' => '#1e3a8a', 'sort_order' => 8, 'is_active' => true],
             ['name' => 'Selesai', 'bg_color' => '#bbf7d0', 'text_color' => '#14532d', 'sort_order' => 9, 'is_active' => true],
@@ -48,7 +48,6 @@ class StatusSeeder extends Seeder
             ['name' => 'Rejected', 'bg_color' => '#fee2e2', 'text_color' => '#991b1b', 'sort_order' => 120, 'is_active' => false],
             // Old status names (before refactoring)
             ['name' => 'Persetujuan Pemenang', 'bg_color' => '#dcfce7', 'text_color' => '#166534', 'sort_order' => 121, 'is_active' => false],
-            ['name' => 'Awarding', 'bg_color' => '#dcfce7', 'text_color' => '#166534', 'sort_order' => 122, 'is_active' => false],
             ['name' => 'PO/SPK', 'bg_color' => '#bfdbfe', 'text_color' => '#1e3a8a', 'sort_order' => 123, 'is_active' => false],
         ];
 
