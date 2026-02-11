@@ -65,6 +65,14 @@ class DepartmentController extends Controller
      */
     public function destroy(Department $department): JsonResponse
     {
+        // Check if department is referenced by procurement items
+        $usageCount = \App\Models\ProcurementItem::where('department_id', $department->id)->count();
+        if ($usageCount > 0) {
+            return response()->json([
+                'message' => "Department \"{$department->name}\" tidak dapat dihapus karena masih digunakan oleh {$usageCount} item pengadaan.",
+            ], 422);
+        }
+
         $department->delete();
 
         return response()->json([

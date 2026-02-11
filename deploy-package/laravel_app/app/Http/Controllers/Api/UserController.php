@@ -151,7 +151,7 @@ class UserController extends Controller
         if ($validated['role'] === 'buyer') {
             $buyer = $user->buyer;
             if ($buyer) {
-                $buyerUpdate = ['name' => $validated['name']];
+                $buyerUpdate = ['name' => $validated['name'], 'is_active' => true];
                 if (isset($validated['buyer_color'])) {
                     $buyerUpdate['color'] = $validated['buyer_color'];
                 }
@@ -168,6 +168,12 @@ class UserController extends Controller
                     'text_color' => $validated['buyer_text_color'] ?? '#ffffff',
                     'is_active' => true,
                 ]);
+            }
+        } else {
+            // Role changed away from buyer — deactivate buyer record if exists
+            $buyer = $user->buyer;
+            if ($buyer) {
+                $buyer->update(['is_active' => false]);
             }
         }
 

@@ -29,6 +29,50 @@ class DashboardController extends Controller
             $query->where('department_id', $request->department_id);
         }
 
+        // Apply buyer filter (for personalized buyer dashboard)
+        if ($request->has('buyer_id') && $request->buyer_id) {
+            $query->where('buyer_id', $request->buyer_id);
+        }
+
+        // Apply status filter
+        if ($request->has('status_id') && $request->status_id) {
+            $query->where('status_id', $request->status_id);
+        }
+
+        // Apply user requester filter
+        if ($request->has('user_requester') && $request->user_requester) {
+            $query->where('user_requester', $request->user_requester);
+        }
+
+        // Apply search filter (same logic as ProcurementItemController)
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('no_pr', 'like', "%{$search}%")
+                    ->orWhere('mat_code', 'like', "%{$search}%")
+                    ->orWhere('nama_barang', 'like', "%{$search}%")
+                    ->orWhere('user_requester', 'like', "%{$search}%");
+            });
+        }
+
+        // "Hanya Saya" filter - show ONLY items assigned to current buyer via buyer.user_id
+        // (same logic as ProcurementItemController)
+        $user = auth()->user();
+        if ($request->input('only_mine') === 'true' && $user && $user->role === 'buyer') {
+            $query->whereHas('buyer', function ($buyerQuery) use ($user) {
+                $buyerQuery->where('user_id', $user->id);
+            });
+        }
+
+        // AVP can only see metrics from their assigned departments
+        if ($user && $user->role === 'avp') {
+            $departmentIds = $user->departments()->pluck('departments.id')->toArray();
+            if (!empty($departmentIds)) {
+                $query->whereIn('department_id', $departmentIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
         // Calculate KPI Cards
         $totalPr = $query->count();
         $totalNilai = (clone $query)->sum('nilai');

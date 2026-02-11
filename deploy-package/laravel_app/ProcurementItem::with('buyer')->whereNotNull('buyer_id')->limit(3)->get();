@@ -1,0 +1,121 @@
+[
+    {
+        "id": 1,
+        "name": "Dicky Setiagraha",
+        "color": "#fef9c3",
+        "text_color": "#854d0e",
+        "is_active": true
+    },
+    {
+        "id": 2,
+        "name": "Ato Heryanto",
+        "color": "#dcfce7",
+        "text_color": "#166534",
+        "is_active": true
+    },
+    {
+        "id": 3,
+        "name": "Cholida Maranani",
+        "color": "#dbeafe",
+        "text_color": "#1e40af",
+        "is_active": true
+    },
+    {
+        "id": 4,
+        "name": "Heru Winata Praja",
+        "color": "#ffedd5",
+        "text_color": "#9a3412",
+        "is_active": true
+    },
+    {
+        "id": 5,
+        "name": "Eva Sepsilia Sari",
+        "color": "#f3e8ff",
+        "text_color": "#6b21a8",
+        "is_active": true
+    },
+    {
+        "id": 6,
+        "name": "Nawang Wulan",
+        "color": "#f1f5f9",
+        "text_color": "#334155",
+        "is_active": true
+    },
+    {
+        "id": 7,
+        "name": "Gugun GT",
+        "color": "#dcfce7",
+        "text_color": "#166534",
+        "is_active": true
+    },
+    {
+        "id": 8,
+        "name": "Dian Sholihat",
+        "color": "#f3e8ff",
+        "text_color": "#6b21a8",
+        "is_active": true
+    },
+    {
+        "id": 9,
+        "name": "Erwin Herdiana",
+        "color": "#ffedd5",
+        "text_color": "#9a3412",
+        "is_active": true
+    },
+    {
+        "id": 10,
+        "name": "Tathu RA",
+        "color": "#fef9c3",
+        "text_color": "#854d0e",
+        "is_active": true
+    },
+    {
+        "id": 11,
+        "name": "Erik Erdiana",
+        "color": "#dbeafe",
+        "text_color": "#1e40af",
+        "is_active": true
+    },
+    {
+        "id": 12,
+        "name": "Eggy Baharudin",
+        "color": "#f1f5f9",
+        "text_color": "#334155",
+        "is_active": true
+    },
+    {
+        "id": 13,
+        "name": "Mutia Virgiana",
+        "color": "#fef9c3",
+        "text_color": "#854d0e",
+        "is_active": true
+    },
+    {
+        "id": 14,
+        "name": "Mail Marzuki",
+        "color": "#dbeafe",
+        "text_color": "#1e40af",
+        "is_active": true
+    },
+    {
+        "id": 15,
+        "name": "Ade Sunarya",
+        "color": "#f3e8ff",
+        "text_color": "#6b21a8",
+        "is_active": true
+    },
+    {
+        "id": 16,
+        "name": "Akbar Faturahman",
+        "color": "#dcfce7",
+        "text_color": "#166534",
+        "is_active": true
+    },
+    {
+        "id": 18,
+        "name": "Test Buyer",
+        "color": "#e8eaed",
+        "text_color": "#ffffff",
+        "is_active": true
+    }
+][90m⏎[39m

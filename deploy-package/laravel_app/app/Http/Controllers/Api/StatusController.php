@@ -69,6 +69,14 @@ class StatusController extends Controller
      */
     public function destroy(Status $status): JsonResponse
     {
+        // Check if status is referenced by procurement items
+        $usageCount = \App\Models\ProcurementItem::where('status_id', $status->id)->count();
+        if ($usageCount > 0) {
+            return response()->json([
+                'message' => "Status \"{$status->name}\" tidak dapat dihapus karena masih digunakan oleh {$usageCount} item pengadaan.",
+            ], 422);
+        }
+
         $status->delete();
 
         return response()->json([

@@ -20,26 +20,38 @@ class UserSeeder extends Seeder
      */
     private array $buyerColors = [
         // PBJ1
-        'Dicky Setiagraha' => ['color' => '#fef9c3', 'text_color' => '#854d0e'], // Yellow (Bid Open)
-        'Ato Heryanto' => ['color' => '#dcfce7', 'text_color' => '#166534'],     // Green (Approve)
-        'Cholida Maranani' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],  // Blue (Eval)
-        'Heru Winata Praja' => ['color' => '#ffedd5', 'text_color' => '#9a3412'], // Orange (RFQ)
-        'Eva Sepsilia Sari' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],  // Purple (Nego)
-        'Nawang Wulan' => ['color' => '#f1f5f9', 'text_color' => '#334155'],      // Gray (DUR)
+        'Dicky Setiagraha' => ['color' => '#fef9c3', 'text_color' => '#854d0e'], // Yellow
+        'Ato Heryanto' => ['color' => '#dcfce7', 'text_color' => '#166534'],     // Green
+        'Cholida Maranani' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],  // Blue
+        'Heru Winata Praja' => ['color' => '#ffedd5', 'text_color' => '#9a3412'], // Orange
+        'Eva Sepsilia Sari' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],  // Purple
+        'Nawang Wulan Jannatul Firdaus' => ['color' => '#f1f5f9', 'text_color' => '#334155'], // Gray
 
         // PBJ2
-        'Gugun GT' => ['color' => '#dcfce7', 'text_color' => '#166534'],          // Green
-        'Dian Sholihat' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],     // Purple
-        'Erwin Herdiana' => ['color' => '#ffedd5', 'text_color' => '#9a3412'],    // Orange
-        'Tathu RA' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],          // Yellow
-        'Erik Erdiana' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],      // Blue
-        'Eggy Baharudin' => ['color' => '#f1f5f9', 'text_color' => '#334155'],    // Gray
-        'Mutia Virgiana' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],    // Yellow
+        'Gugun Gunara Taupik' => ['color' => '#dcfce7', 'text_color' => '#166534'],  // Green
+        'Dian Sholihat' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],        // Purple
+        'Erwin Herdiyana' => ['color' => '#ffedd5', 'text_color' => '#9a3412'],      // Orange
+        'Tathu Rabiatul A' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],     // Yellow
+        'Mutia Virginia' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],       // Yellow
 
         // PJDP
-        'Mail Marzuki' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],      // Blue
-        'Ade Sunarya' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],       // Purple
-        'Akbar Faturahman' => ['color' => '#dcfce7', 'text_color' => '#166534'],  // Green
+        'Ade Sunarya' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],          // Purple
+        'Maryono' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],              // Blue
+        'Aditya Pratama Putra' => ['color' => '#dcfce7', 'text_color' => '#166534'], // Green
+
+        // VM
+        'Annafi Rohadi' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],        // Blue
+        'Muhamad Adam Zamzami' => ['color' => '#ffedd5', 'text_color' => '#9a3412'], // Orange
+        'Bambang Ahmad Makmur' => ['color' => '#dcfce7', 'text_color' => '#166534'], // Green
+        'Rona Kurniawan' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],       // Purple
+        'Debora Geraldyn Br Tobing' => ['color' => '#fef9c3', 'text_color' => '#854d0e'], // Yellow
+
+        // Dep. PBJ
+        'Ronald Irwanto' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],       // Blue
+        'Dep. Pengadaan Barang & Jasa' => ['color' => '#f1f5f9', 'text_color' => '#334155'], // Gray
+
+        // Staff
+        'Titin Haryati' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],        // Purple
     ];
 
     public function run(): void
@@ -49,42 +61,53 @@ class UserSeeder extends Seeder
         $pbj2 = Department::where('name', 'PBJ2')->first();
         $pjdp = Department::where('name', 'PJDP')->first();
         $vm = Department::where('name', 'VM')->first();
+        $depPbj = Department::where('name', 'Dep. PBJ')->first();
+        $staff = Department::where('name', 'Staff')->first();
 
         // ========== ADMIN ==========
         $this->createUser('admin', 'Administrator', 'admin', null);
-        $this->createUser('7150574', 'Rona Kurniawan', 'admin', $vm);
-
-        // ========== STAFF ==========
-        $this->createUser('3123084', 'Ronald Irwanto', 'staff', null);
-        $this->createUser('05070275', 'Titin Haryati', 'staff', null);
 
         // ========== AVP ==========
+        $this->createUser('3032158', 'M. Dedy Arissandi', 'avp', $vm);
         $this->createUser('3942055', 'Andrisol', 'avp', $pbj1);
         $this->createUser('3123090', 'Guntur Gumilar', 'avp', $pbj2);
+        $this->createUser('3143275', 'Dewi Yuliana Maharani', 'avp', $pjdp);
 
-        // ========== BUYERS (16 orang sesuai gambar) ==========
-
-        // PBJ1 Buyers
-        $this->createUser('3082563', 'Dicky Setiagraha', 'buyer', $pbj1);
-        $this->createUser('3942046', 'Ato Heryanto', 'buyer', $pbj1);
-        $this->createUser('3072505', 'Cholida Maranani', 'buyer', $pbj1);
-        $this->createUser('3092810', 'Heru Winata Praja', 'buyer', $pbj1);
-        $this->createUser('3092794', 'Eva Sepsilia Sari', 'buyer', $pbj1);
-        $this->createUser('07221061', 'Nawang Wulan', 'buyer', $pbj1);
-
-        // PBJ2 Buyers
-        $this->createUser('3102923', 'Gugun GT', 'buyer', $pbj2);
-        $this->createUser('3082603', 'Dian Sholihat', 'buyer', $pbj2);
-        $this->createUser('3102950', 'Erwin Herdiana', 'buyer', $pbj2);
-        $this->createUser('3102929', 'Tathu RA', 'buyer', $pbj2);
-        $this->createUser('07221058', 'Erik Erdiana', 'buyer', $pbj2);
-        $this->createUser('04231222', 'Eggy Baharudin', 'buyer', $pbj2);
-        $this->createUser('07221059', 'Mutia Virgiana', 'buyer', $pbj2);
+        // ========== BUYERS ==========
 
         // PJDP Buyers
-        $this->createUser('3102942', 'Mail Marzuki', 'buyer', $pjdp);
         $this->createUser('3042327', 'Ade Sunarya', 'buyer', $pjdp);
-        $this->createUser('3102955', 'Akbar Faturahman', 'buyer', $pjdp);
+        $this->createUser('3052374', 'Maryono', 'buyer', $pjdp);
+        $this->createUser('3123163', 'Aditya Pratama Putra', 'buyer', $pjdp);
+
+        // PBJ1 Buyers
+        $this->createUser('3072505', 'Cholida Maranani', 'buyer', $pbj1);
+        $this->createUser('3082563', 'Dicky Setiagraha', 'buyer', $pbj1);
+        $this->createUser('3092794', 'Eva Sepsilia Sari', 'buyer', $pbj1);
+        $this->createUser('3092810', 'Heru Winata Praja', 'buyer', $pbj1);
+        $this->createUser('3942046', 'Ato Heryanto', 'buyer', $pbj1);
+        $this->createUser('07221061', 'Nawang Wulan Jannatul Firdaus', 'buyer', $pbj1);
+
+        // PBJ2 Buyers
+        $this->createUser('3082603', 'Dian Sholihat', 'buyer', $pbj2);
+        $this->createUser('3102923', 'Gugun Gunara Taupik', 'buyer', $pbj2);
+        $this->createUser('3102929', 'Tathu Rabiatul A', 'buyer', $pbj2);
+        $this->createUser('3102950', 'Erwin Herdiyana', 'buyer', $pbj2);
+        $this->createUser('07221059', 'Mutia Virginia', 'buyer', $pbj2);
+
+        // VM Buyers
+        $this->createUser('3102945', 'Annafi Rohadi', 'buyer', $vm);
+        $this->createUser('3123110', 'Muhamad Adam Zamzami', 'buyer', $vm);
+        $this->createUser('3921960', 'Bambang Ahmad Makmur', 'buyer', $vm);
+        $this->createUser('07150574', 'Rona Kurniawan', 'buyer', $vm);
+        $this->createUser('07251218', 'Debora Geraldyn Br Tobing', 'buyer', $vm);
+
+        // Dep. PBJ Buyers
+        $this->createUser('3123084', 'Ronald Irwanto', 'buyer', $depPbj);
+        $this->createUser('C006210000', 'Dep. Pengadaan Barang & Jasa', 'buyer', $depPbj);
+
+        // Staff Buyers
+        $this->createUser('05070275', 'Titin Haryati', 'buyer', $staff);
     }
 
     /**

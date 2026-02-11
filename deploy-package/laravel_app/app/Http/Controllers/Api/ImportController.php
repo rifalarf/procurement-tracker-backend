@@ -835,10 +835,16 @@ class ImportController extends Controller
                 $cell = $worksheet->getCell($colLetter . $row);
                 $value = $cell->getValue();
 
-                // Convert numeric values to string (especially for No PR which might be formatted as time)
+                // Convert numeric values to string, preserving decimals
+                // This handles cases where Excel formats the number as time
                 if (is_numeric($value)) {
-                    // This handles cases where Excel formats the number as time
-                    $value = (string) intval($value);
+                    if (floor($value) == $value) {
+                        // Integer value - safe to truncate decimals (e.g., No PR)
+                        $value = (string) intval($value);
+                    } else {
+                        // Decimal value - preserve decimals (e.g., nilai, qty)
+                        $value = (string) $value;
+                    }
                 }
 
                 $rowData[] = $value;
