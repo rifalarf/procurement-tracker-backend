@@ -661,29 +661,39 @@ class ImportController extends Controller
 
         // Resolve buyer
         if (isset($data['buyer_id']) && $data['buyer_id'] !== null && $data['buyer_id'] !== '') {
-            if (is_numeric($data['buyer_id'])) {
+            $buyerInput = $data['buyer_id'];
+
+            if (is_numeric($buyerInput)) {
                 // Numeric buyer_id - validate it exists in buyers table
-                $buyerId = (int) $data['buyer_id'];
-                // Check if this ID exists in buyers (the values in $buyers array are the IDs)
-                if (!in_array($buyerId, $buyers)) {
-                    // ID doesn't exist in buyers table, set to null
-                    $data['buyer_id'] = null;
-                } else {
+                $buyerId = (int) $buyerInput;
+                if (in_array($buyerId, $buyers)) {
                     $data['buyer_id'] = $buyerId;
+                } else {
+                    $data['buyer_id'] = null;
                 }
             } else {
-                // String buyer name - resolve by name
-                $buyerName = $data['buyer_id'];
-                $data['buyer_id'] = $buyers[$buyerName] ?? null;
+                // String buyer name - normalize then resolve
+                $normalizedName = $this->normalizeBuyerName($buyerInput);
 
-                if (!$data['buyer_id']) {
+                // Try to find exact ID match for normalized name
+                $foundId = null;
+
+                // 1. Direct lookup from cache (exact match)
+                if (isset($buyers[$normalizedName])) {
+                    $foundId = $buyers[$normalizedName];
+                }
+
+                // 2. Case-insensitive lookup
+                if (!$foundId) {
                     foreach ($buyers as $name => $id) {
-                        if (strtolower($name) === strtolower($buyerName)) {
-                            $data['buyer_id'] = $id;
+                        if (strtolower($name) === strtolower($normalizedName)) {
+                            $foundId = $id;
                             break;
                         }
                     }
                 }
+
+                $data['buyer_id'] = $foundId;
             }
         } else {
             // Empty or null buyer_id - set to null explicitly
@@ -726,8 +736,15 @@ class ImportController extends Controller
         $dateFields = ['tgl_terima_dokumen', 'tgl_status', 'tgl_po', 'tgl_datang'];
 
         foreach ($dateFields as $field) {
-            if (!empty($data[$field])) {
-                $data[$field] = $this->parseDate($data[$field]);
+            // If the field exists in the data array (mapped column)
+            if (array_key_exists($field, $data)) {
+                if (empty($data[$field])) {
+                    // Explicitly set to null if empty string or null
+                    $data[$field] = null;
+                } else {
+                    // Parse if value exists
+                    $data[$field] = $this->parseDate($data[$field]);
+                }
             }
         }
 
@@ -853,5 +870,45 @@ class ImportController extends Controller
         }
 
         return $rows;
+    }
+
+    /**
+     * Normalize buyer name based on common aliases/variations
+     * Source: fix_data.xlsx
+     */
+    private function normalizeBuyerName(string $name): string
+    {
+        $name = trim($name);
+        if (empty($name)) {
+            return $name;
+        }
+
+        // Canonical names from fix_data.xlsx
+        $mapping = [
+            'akbar' => 'Akbar Faturahman',
+            'ato' => 'Ato Heryanto',
+            'cholida' => 'Cholida Maranani',
+            'dian' => 'Dian Sholihat',
+            'dicky' => 'Dicky Setiagraha',
+            'eggy' => 'Eggy Baharudin',
+            'erik' => 'Erik Erdiana',
+            'erwin' => 'Erwin Herdiana',
+            'gugun' => 'Gugun GT',
+            'heru' => 'Heru Winata Praja',
+            'mutia' => 'Mutia Virgiana',
+            'nawang' => 'Nawang Wulan',
+            'tathu' => 'Tathu RA',
+        ];
+
+        $lowerName = strtolower($name);
+
+        foreach ($mapping as $key => $target) {
+            // Check for exact match of alias or if the alias is contained in the name
+            if (str_contains($lowerName, $key)) {
+                return $target;
+            }
+        }
+
+        return $name;
     }
 }

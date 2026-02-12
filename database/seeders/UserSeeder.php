@@ -32,7 +32,7 @@ class UserSeeder extends Seeder
         'Dian Sholihat' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],        // Purple
         'Erwin Herdiyana' => ['color' => '#ffedd5', 'text_color' => '#9a3412'],      // Orange
         'Tathu Rabiatul A' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],     // Yellow
-        'Mutia Virginia' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],       // Yellow
+        'Mutia Virgiana' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],       // Yellow
 
         // PJDP
         'Ade Sunarya' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],          // Purple
@@ -93,7 +93,7 @@ class UserSeeder extends Seeder
         $this->createUser('3102923', 'Gugun Gunara Taupik', 'buyer', $pbj2);
         $this->createUser('3102929', 'Tathu Rabiatul A', 'buyer', $pbj2);
         $this->createUser('3102950', 'Erwin Herdiyana', 'buyer', $pbj2);
-        $this->createUser('07221059', 'Mutia Virginia', 'buyer', $pbj2);
+        $this->createUser('07221059', 'Mutia Virgiana', 'buyer', $pbj2);
 
         // VM Buyers
         $this->createUser('3102945', 'Annafi Rohadi', 'buyer', $vm);
