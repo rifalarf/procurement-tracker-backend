@@ -37,12 +37,12 @@ class ProcurementItemPolicy
         if (in_array($user->role, ['admin', 'avp', 'staff'])) {
             return true;
         }
-        
+
         // Buyer can update unassigned items or their own assigned items
         if ($item->buyer_id === null) {
             return $user->role === 'buyer';
         }
-        
+
         // Check via buyer relationship -> user_id for assigned items
         $buyer = $item->buyer;
         return $buyer && $buyer->user_id === $user->id;

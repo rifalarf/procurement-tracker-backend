@@ -99,10 +99,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/column-configs/reset', [ColumnConfigController::class, 'reset']);
     });
 
-    // Procurement Items
+    // Procurement Items - Static routes MUST go before dynamic {procurementItem} routes
     Route::get('/procurement-items', [ProcurementItemController::class, 'index']);
     Route::get('/procurement-items/export', [ProcurementItemController::class, 'export']);
     Route::get('/procurement-items/user-requesters', [ProcurementItemController::class, 'getUserRequesters']);
+    Route::get('/procurement-items/custom-field-values/{fieldName}', [ProcurementItemController::class, 'getCustomFieldValues']);
+
+    // Procurement Items - Dynamic routes
     Route::get('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'show']);
     Route::post('/procurement-items', [ProcurementItemController::class, 'store']);
     Route::put('/procurement-items/{procurementItem}', [ProcurementItemController::class, 'update']);
