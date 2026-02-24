@@ -8,7 +8,7 @@
  */
 
 define('ACCESS_KEY', 'deploy-pengadaan-2024-secure');
-define('LARAVEL_PATH', __DIR__ . '/../../pengadaan_app');
+define('LARAVEL_PATH', '/home/matf2269/pengadaan_app');
 
 if (!isset($_GET['key']) || $_GET['key'] !== ACCESS_KEY) {
     http_response_code(403);

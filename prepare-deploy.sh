@@ -53,6 +53,12 @@ rsync -av --progress \
     --exclude='prepare-deploy.sh' \
     "${SCRIPT_DIR}/" "${APP_DIR}/"
 
+# Ensure vendor dependencies are installed for production
+echo -e "${YELLOW}[->] Running composer install for production...${NC}"
+cd "${APP_DIR}"
+composer install --optimize-autoloader --no-dev
+cd "${SCRIPT_DIR}"
+
 # Create production .env file
 echo -e "${YELLOW}[3/9] Creating production .env file...${NC}"
 cat > "${APP_DIR}/.env" << 'ENVFILE'
@@ -110,18 +116,18 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// Determine if the application is in maintenance mode...
-// Path: public_html/pengadaan -> public_html -> home -> pengadaan_app
-if (file_exists($maintenance = __DIR__.'/../../pengadaan_app/storage/framework/maintenance.php')) {
+// Menggunakan absolute path agar tidak bingung dengan relative path
+$appPath = '/home/matf2269/pengadaan_app';
+
+if (file_exists($maintenance = $appPath.'/storage/framework/maintenance.php')) {
     require $maintenance;
 }
 
 // Register the Composer autoloader...
-// IMPORTANT: Path to Laravel app folder (2 levels up from public_html/pengadaan)
-require __DIR__.'/../../pengadaan_app/vendor/autoload.php';
+require $appPath.'/vendor/autoload.php';
 
 // Bootstrap Laravel and handle the request...
-(require_once __DIR__.'/../../pengadaan_app/bootstrap/app.php')
+(require_once $appPath.'/bootstrap/app.php')
     ->handleRequest(Request::capture());
 INDEXPHP
 
@@ -164,7 +170,7 @@ cat > "${PUBLIC_DIR}/deploy-admin.php" << 'ADMINPHP'
  */
 
 define('ACCESS_KEY', 'deploy-pengadaan-2024-secure');
-define('LARAVEL_PATH', __DIR__ . '/../../pengadaan_app');
+define('LARAVEL_PATH', '/home/matf2269/pengadaan_app');
 
 if (!isset($_GET['key']) || $_GET['key'] !== ACCESS_KEY) {
     http_response_code(403);
@@ -440,7 +446,8 @@ echo -e "   ${GREEN}✓ Deploy Admin Panel created${NC}"
 
 # Create ZIP files
 echo -e "${YELLOW}[8/9] Creating ZIP files...${NC}"
-cd "${APP_DIR}" && zip -rq "${DEPLOY_DIR}/laravel_app.zip" .
+# Exclude node_modules and .git, but KEEP vendor!
+cd "${APP_DIR}" && zip -rq "${DEPLOY_DIR}/laravel_app.zip" . -x "node_modules/*" ".git/*" "tests/*"
 echo -e "   ${GREEN}✓ laravel_app.zip created${NC}"
 
 cd "${PUBLIC_DIR}" && zip -rq "${DEPLOY_DIR}/public_html.zip" .

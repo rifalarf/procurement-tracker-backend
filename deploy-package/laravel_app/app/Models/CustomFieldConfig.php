@@ -14,6 +14,7 @@ class CustomFieldConfig extends Model
         'label',
         'is_active',
         'is_searchable',
+        'is_filterable',
         'display_order',
         'updated_by',
     ];
@@ -21,6 +22,7 @@ class CustomFieldConfig extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_searchable' => 'boolean',
+        'is_filterable' => 'boolean',
         'display_order' => 'integer',
     ];
 
@@ -49,6 +51,14 @@ class CustomFieldConfig extends Model
     }
 
     /**
+     * Scope to get only filterable custom fields
+     */
+    public function scopeFilterable($query)
+    {
+        return $query->where('is_active', true)->where('is_filterable', true);
+    }
+
+    /**
      * Get all active field configurations
      */
     public static function getActiveFields(): array
@@ -62,5 +72,13 @@ class CustomFieldConfig extends Model
     public static function getSearchableFieldNames(): array
     {
         return static::searchable()->pluck('field_name')->toArray();
+    }
+
+    /**
+     * Get filterable field names
+     */
+    public static function getFilterableFieldNames(): array
+    {
+        return static::filterable()->pluck('field_name')->toArray();
     }
 }

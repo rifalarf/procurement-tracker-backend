@@ -64,7 +64,7 @@ class ProcurementItemResource extends JsonResource
             'keterangan' => $this->keterangan,
 
             // Custom fields
-            'custom_field_1' => $this->custom_field_1,
+            'custom_field_1' => $this->formatBjValue(),
             'custom_field_2' => $this->custom_field_2,
             'custom_field_3' => $this->custom_field_3,
             'custom_field_4' => $this->custom_field_4,
@@ -85,9 +85,6 @@ class ProcurementItemResource extends JsonResource
      */
     private function determineCanEdit($user): bool
     {
-        if (!$user) {
-            return false;
-        }
 
         // Admin and Staff can edit all items
         if (in_array($user->role, ['admin', 'staff'])) {
@@ -143,5 +140,22 @@ class ProcurementItemResource extends JsonResource
         }
 
         return FieldPermission::getViewableFields($user->role);
+    }
+
+    /**
+     * Format Custom Field 1 (B/J) to human-readable strings "Barang" or "Jasa"
+     */
+    private function formatBjValue(): string
+    {
+        $value = trim(strtoupper((string) $this->custom_field_1));
+        if ($value === 'D' || $value === 'JASA') {
+            return 'Jasa';
+        } elseif ($value === 'BARANG') {
+            return 'Barang';
+        }
+
+        // Extrapolate meaning if it's empty "-" or NULL based on whether Mat Code exists
+        $hasMatCode = isset($this->mat_code) && trim((string) $this->mat_code) !== '';
+        return $hasMatCode ? 'Barang' : 'Jasa';
     }
 }

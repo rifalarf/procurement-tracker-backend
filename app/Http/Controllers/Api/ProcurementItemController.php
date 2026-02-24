@@ -112,12 +112,12 @@ class ProcurementItemController extends Controller
         // "Hanya Saya" (only_mine) filter for Buyers
         if ($request->input('only_mine') === 'true' && $user && $user->role === 'buyer') {
             $departmentIds = $user->departments->pluck('id');
+            // Fetch the specific buyer IDs associated with this logged-in user in a single quick lookup
+            $buyerIds = \App\Models\Buyer::where('user_id', $user->id)->pluck('id');
 
-            $query->where(function ($q) use ($user, $departmentIds) {
+            $query->where(function ($q) use ($buyerIds, $departmentIds) {
                 // Condition 1: Items explicitly assigned to this buyer
-                $q->whereHas('buyer', function ($buyerQuery) use ($user) {
-                    $buyerQuery->where('user_id', $user->id);
-                })
+                $q->whereIn('buyer_id', $buyerIds)
                     // Condition 2: Items unassigned BUT within the buyer's department
                     ->orWhere(function ($subQ) use ($departmentIds) {
                         $subQ->whereNull('buyer_id')

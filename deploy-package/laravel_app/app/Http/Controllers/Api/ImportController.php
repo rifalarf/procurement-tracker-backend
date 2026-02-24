@@ -26,12 +26,15 @@ class ImportController extends Controller
      * Excel column header to database field mapping
      */
     private array $columnMapping = [
-        'NO PR' => 'no_pr',
+        'No PR' => 'no_pr',
+        'B/J' => null,
+        'Acc' => null,
         'Mat Code' => 'mat_code',
         'Nama Barang' => 'nama_barang',
         'Qty' => 'qty',
         'UM' => 'um',
         'PG' => 'pg',
+        'Item Category' => 'item_category',
         'User' => 'user_requester',
         'Nilai' => 'nilai',
         'Bagian' => 'department_id',
@@ -46,7 +49,17 @@ class ImportController extends Controller
         'Tanggal PO' => 'tgl_po',
         'Tanggal Datang' => 'tgl_datang',
         'Keterangan' => 'keterangan',
-        'Item Category' => 'item_category',
+    ];
+
+    /**
+     * Alias mapping for common typos and legacy templates
+     * These will not be included in the template download
+     */
+    private array $aliasMapping = [
+        'Item Categori' => 'item_category',
+        'Kategori Item' => 'item_category',
+        'Kategori Barang' => 'item_category',
+        'Jenis Barang' => 'item_category',
     ];
 
     /**
@@ -275,6 +288,7 @@ class ImportController extends Controller
 
             DB::beginTransaction();
 
+            $dataRows = [];
             for ($i = 1; $i < count($rows); $i++) {
                 $row = $rows[$i];
                 $rowData = $this->mapRowToFields($row, $headers, $mappings);
@@ -293,7 +307,30 @@ class ImportController extends Controller
                     continue;
                 }
 
+                $dataRows[] = [
+                    'original_index' => $i,
+                    'row_data' => $rowData
+                ];
+            }
 
+            // Sort dataRows by tgl_terima_dokumen
+            usort($dataRows, function ($a, $b) {
+                $dateA = $this->parseDate($a['row_data']['tgl_terima_dokumen'] ?? null);
+                $dateB = $this->parseDate($b['row_data']['tgl_terima_dokumen'] ?? null);
+
+                if (empty($dateA) && empty($dateB))
+                    return 0;
+                if (empty($dateA))
+                    return 1; // Put empty dates at the end
+                if (empty($dateB))
+                    return -1;
+
+                return strtotime($dateA) <=> strtotime($dateB);
+            });
+
+            foreach ($dataRows as $dataRow) {
+                $i = $dataRow['original_index'];
+                $rowData = $dataRow['row_data'];
 
                 try {
                     // Resolve lookups
@@ -452,18 +489,31 @@ class ImportController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Set headers
+        // Set headers (standard + custom fields)
         $headers = array_keys($this->columnMapping);
+
+        // Add active custom field headers
+        $activeCustomFields = CustomFieldConfig::active()->get();
+        foreach ($activeCustomFields as $config) {
+            $label = $config->label ?? ucfirst(str_replace('_', ' ', $config->field_name));
+            if (!in_array($label, array_keys($this->columnMapping))) {
+                $headers[] = $label;
+            }
+        }
+
         $sheet->fromArray($headers, null, 'A1');
 
         // Add example data
         $exampleData = [
-            'PR-001',           // NO PR
+            'PR-001',           // No PR
+            'Barang',           // B/J
+            'K',                // Acc
             'MAT-001',          // Mat Code
             'Contoh Barang',    // Nama Barang
             '10',               // Qty
             'PCS',              // UM
             'PG-001',           // PG
+            'Spare Part',       // Item Category
             'John Doe',         // User
             '1000000',          // Nilai
             'IT',               // Bagian
@@ -479,10 +529,20 @@ class ImportController extends Controller
             '2024-02-01',       // Tanggal Datang
             'Keterangan contoh', // Keterangan
         ];
+
+        // Add empty example values for custom fields
+        foreach ($activeCustomFields as $config) {
+            $label = $config->label ?? ucfirst(str_replace('_', ' ', $config->field_name));
+            if (!in_array($label, array_keys($this->columnMapping))) {
+                $exampleData[] = '';
+            }
+        }
+
         $sheet->fromArray($exampleData, null, 'A2');
 
-        // Style header row
-        $sheet->getStyle('A1:T1')->applyFromArray([
+        // Style header row - dynamic range
+        $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
             'font' => ['bold' => true],
             'fill' => [
                 'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
@@ -491,7 +551,8 @@ class ImportController extends Controller
         ]);
 
         // Auto-size columns
-        foreach (range('A', 'T') as $col) {
+        for ($i = 1; $i <= count($headers); $i++) {
+            $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -512,13 +573,13 @@ class ImportController extends Controller
         $header = trim($header);
 
         // Exact match
-        if (isset($this->columnMapping[$header])) {
+        if (array_key_exists($header, $this->columnMapping) && $this->columnMapping[$header] !== null) {
             return $this->columnMapping[$header];
         }
 
         // Case-insensitive match
         foreach ($this->columnMapping as $excelHeader => $dbField) {
-            if (strtolower($header) === strtolower($excelHeader)) {
+            if ($dbField !== null && strtolower($header) === strtolower($excelHeader)) {
                 return $dbField;
             }
         }
@@ -526,6 +587,44 @@ class ImportController extends Controller
         // Partial match
         $headerLower = strtolower($header);
         foreach ($this->columnMapping as $excelHeader => $dbField) {
+            if (
+                $dbField !== null && (
+                    str_contains($headerLower, strtolower($excelHeader)) ||
+                    str_contains(strtolower($excelHeader), $headerLower)
+                )
+            ) {
+                return $dbField;
+            }
+        }
+
+        // Dynamic custom field matching
+        $activeCustomFields = CustomFieldConfig::active()->get();
+        foreach ($activeCustomFields as $config) {
+            $label = $config->label ?? ucfirst(str_replace('_', ' ', $config->field_name));
+            if (strtolower($header) === strtolower($label)) {
+                return $config->field_name;
+            }
+            // Partial match for custom fields
+            if (
+                str_contains($headerLower, strtolower($label)) ||
+                str_contains(strtolower($label), $headerLower)
+            ) {
+                return $config->field_name;
+            }
+        }
+
+        // Alias match
+        if (array_key_exists($header, $this->aliasMapping)) {
+            return $this->aliasMapping[$header];
+        }
+
+        foreach ($this->aliasMapping as $excelHeader => $dbField) {
+            if (strtolower($header) === strtolower($excelHeader)) {
+                return $dbField;
+            }
+        }
+
+        foreach ($this->aliasMapping as $excelHeader => $dbField) {
             if (
                 str_contains($headerLower, strtolower($excelHeader)) ||
                 str_contains(strtolower($excelHeader), $headerLower)
@@ -557,12 +656,43 @@ class ImportController extends Controller
     {
         $header = strtolower(trim($header));
 
+        // Check against main column mappings
         foreach ($this->columnMapping as $excelHeader => $field) {
+            if ($field !== null && $field === $dbField) {
+                if (strtolower($excelHeader) === $header) {
+                    return 100;
+                }
+                if (str_contains($header, strtolower($excelHeader))) {
+                    return 80;
+                }
+                return 60;
+            }
+        }
+
+        // Check against aliases
+        foreach ($this->aliasMapping as $excelHeader => $field) {
             if ($field === $dbField) {
                 if (strtolower($excelHeader) === $header) {
                     return 100;
                 }
                 if (str_contains($header, strtolower($excelHeader))) {
+                    return 80;
+                }
+                return 60;
+            }
+        }
+
+        // Check against custom fields
+        $activeCustomFields = CustomFieldConfig::active()->get();
+        foreach ($activeCustomFields as $config) {
+            if ($config->field_name === $dbField) {
+                $label = $config->label ?? ucfirst(str_replace('_', ' ', $config->field_name));
+                $labelLower = strtolower($label);
+
+                if ($labelLower === $header) {
+                    return 100;
+                }
+                if (str_contains($header, $labelLower) || str_contains($labelLower, $header)) {
                     return 80;
                 }
                 return 60;
@@ -578,7 +708,7 @@ class ImportController extends Controller
     private function getAvailableFields(): array
     {
         $fields = [
-            ['value' => 'no_pr', 'label' => 'NO PR', 'required' => true],
+            ['value' => 'no_pr', 'label' => 'No PR', 'required' => true],
             ['value' => 'mat_code', 'label' => 'Mat Code', 'required' => false],
             ['value' => 'nama_barang', 'label' => 'Nama Barang', 'required' => false],
             ['value' => 'qty', 'label' => 'Qty', 'required' => false],
@@ -661,29 +791,39 @@ class ImportController extends Controller
 
         // Resolve buyer
         if (isset($data['buyer_id']) && $data['buyer_id'] !== null && $data['buyer_id'] !== '') {
-            if (is_numeric($data['buyer_id'])) {
+            $buyerInput = $data['buyer_id'];
+
+            if (is_numeric($buyerInput)) {
                 // Numeric buyer_id - validate it exists in buyers table
-                $buyerId = (int) $data['buyer_id'];
-                // Check if this ID exists in buyers (the values in $buyers array are the IDs)
-                if (!in_array($buyerId, $buyers)) {
-                    // ID doesn't exist in buyers table, set to null
-                    $data['buyer_id'] = null;
-                } else {
+                $buyerId = (int) $buyerInput;
+                if (in_array($buyerId, $buyers)) {
                     $data['buyer_id'] = $buyerId;
+                } else {
+                    $data['buyer_id'] = null;
                 }
             } else {
-                // String buyer name - resolve by name
-                $buyerName = $data['buyer_id'];
-                $data['buyer_id'] = $buyers[$buyerName] ?? null;
+                // String buyer name - normalize then resolve
+                $normalizedName = $this->normalizeBuyerName($buyerInput);
 
-                if (!$data['buyer_id']) {
+                // Try to find exact ID match for normalized name
+                $foundId = null;
+
+                // 1. Direct lookup from cache (exact match)
+                if (isset($buyers[$normalizedName])) {
+                    $foundId = $buyers[$normalizedName];
+                }
+
+                // 2. Case-insensitive lookup
+                if (!$foundId) {
                     foreach ($buyers as $name => $id) {
-                        if (strtolower($name) === strtolower($buyerName)) {
-                            $data['buyer_id'] = $id;
+                        if (strtolower($name) === strtolower($normalizedName)) {
+                            $foundId = $id;
                             break;
                         }
                     }
                 }
+
+                $data['buyer_id'] = $foundId;
             }
         } else {
             // Empty or null buyer_id - set to null explicitly
@@ -726,8 +866,15 @@ class ImportController extends Controller
         $dateFields = ['tgl_terima_dokumen', 'tgl_status', 'tgl_po', 'tgl_datang'];
 
         foreach ($dateFields as $field) {
-            if (!empty($data[$field])) {
-                $data[$field] = $this->parseDate($data[$field]);
+            // If the field exists in the data array (mapped column)
+            if (array_key_exists($field, $data)) {
+                if (empty($data[$field])) {
+                    // Explicitly set to null if empty string or null
+                    $data[$field] = null;
+                } else {
+                    // Parse if value exists
+                    $data[$field] = $this->parseDate($data[$field]);
+                }
             }
         }
 
@@ -750,6 +897,20 @@ class ImportController extends Controller
                 return $date->format('Y-m-d');
             } catch (\Exception $e) {
                 return null;
+            }
+        }
+
+        $value = trim((string) $value);
+
+        // Explicitly check for DD/MM/YYYY or DD-MM-YYYY format
+        // This prevents Carbon from incorrectly interpreting it as MM/DD/YYYY
+        if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/', $value, $matches)) {
+            $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+            $month = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+            $year = $matches[3];
+
+            if (checkdate((int) $month, (int) $day, (int) $year)) {
+                return "{$year}-{$month}-{$day}";
             }
         }
 
@@ -814,6 +975,23 @@ class ImportController extends Controller
             $data['nilai'] = 0;
         }
 
+        // Parse custom_field_1 (B/J - Barang/Jasa)
+        if (isset($data['custom_field_1'])) {
+            $bjValue = trim(strtoupper((string) $data['custom_field_1']));
+
+            if ($bjValue === 'D') {
+                $data['custom_field_1'] = 'Jasa';
+            } elseif ($bjValue === '' || $bjValue === null) {
+                // Fallback to checking Mat Code
+                $hasMatCode = isset($data['mat_code']) && trim((string) $data['mat_code']) !== '';
+                $data['custom_field_1'] = $hasMatCode ? 'Barang' : 'Jasa';
+            }
+        } else {
+            // Extrapolate B/J if custom_field_1 key doesn't even exist in the data yet
+            $hasMatCode = isset($data['mat_code']) && trim((string) $data['mat_code']) !== '';
+            $data['custom_field_1'] = $hasMatCode ? 'Barang' : 'Jasa';
+        }
+
         return $data;
     }
 
@@ -853,5 +1031,45 @@ class ImportController extends Controller
         }
 
         return $rows;
+    }
+
+    /**
+     * Normalize buyer name based on common aliases/variations
+     * Source: fix_data.xlsx
+     */
+    private function normalizeBuyerName(string $name): string
+    {
+        $name = trim($name);
+        if (empty($name)) {
+            return $name;
+        }
+
+        // Canonical names from fix_data.xlsx
+        $mapping = [
+            'akbar' => 'Akbar Faturahman',
+            'ato' => 'Ato Heryanto',
+            'cholida' => 'Cholida Maranani',
+            'dian' => 'Dian Sholihat',
+            'dicky' => 'Dicky Setiagraha',
+            'eggy' => 'Eggy Baharudin',
+            'erik' => 'Erik Erdiana',
+            'erwin' => 'Erwin Herdiana',
+            'gugun' => 'Gugun GT',
+            'heru' => 'Heru Winata Praja',
+            'mutia' => 'Mutia Virgiana',
+            'nawang' => 'Nawang Wulan',
+            'tathu' => 'Tathu RA',
+        ];
+
+        $lowerName = strtolower($name);
+
+        foreach ($mapping as $key => $target) {
+            // Check for exact match of alias or if the alias is contained in the name
+            if (str_contains($lowerName, $key)) {
+                return $target;
+            }
+        }
+
+        return $name;
     }
 }

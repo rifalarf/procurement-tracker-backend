@@ -63,7 +63,7 @@ class UpdateProcurementItemRequest extends FormRequest
             'nilai' => 'nullable|numeric|min:0',
             'department_id' => 'nullable|exists:departments,id',
             'tgl_terima_dokumen' => 'nullable|date',
-            'procx_manual' => 'nullable|regex:/^(PROCX|MANUAL)?$/',
+            'procx_manual' => ['nullable', 'regex:/^(PROCX|MANUAL)?$/'],
             'buyer_id' => 'nullable|exists:buyers,id',
             'status_id' => 'nullable|exists:statuses,id',
             'tgl_status' => 'nullable|date',

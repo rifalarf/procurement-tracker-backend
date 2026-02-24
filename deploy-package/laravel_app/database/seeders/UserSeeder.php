@@ -32,11 +32,10 @@ class UserSeeder extends Seeder
         'Dian Sholihat' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],        // Purple
         'Erwin Herdiyana' => ['color' => '#ffedd5', 'text_color' => '#9a3412'],      // Orange
         'Tathu Rabiatul A' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],     // Yellow
-        'Mutia Virginia' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],       // Yellow
+        'Mutia Virgiana' => ['color' => '#fef9c3', 'text_color' => '#854d0e'],       // Yellow
 
         // PJDP
         'Ade Sunarya' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],          // Purple
-        'Maryono' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],              // Blue
         'Aditya Pratama Putra' => ['color' => '#dcfce7', 'text_color' => '#166534'], // Green
 
         // VM
@@ -46,12 +45,8 @@ class UserSeeder extends Seeder
         'Rona Kurniawan' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],       // Purple
         'Debora Geraldyn Br Tobing' => ['color' => '#fef9c3', 'text_color' => '#854d0e'], // Yellow
 
-        // Dep. PBJ
+        // VP
         'Ronald Irwanto' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],       // Blue
-        'Dep. Pengadaan Barang & Jasa' => ['color' => '#f1f5f9', 'text_color' => '#334155'], // Gray
-
-        // Staff
-        'Titin Haryati' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],        // Purple
     ];
 
     public function run(): void
@@ -61,11 +56,13 @@ class UserSeeder extends Seeder
         $pbj2 = Department::where('name', 'PBJ2')->first();
         $pjdp = Department::where('name', 'PJDP')->first();
         $vm = Department::where('name', 'VM')->first();
-        $depPbj = Department::where('name', 'Dep. PBJ')->first();
         $staff = Department::where('name', 'Staff')->first();
+        $admin = Department::where('name', 'Admin')->first();
 
         // ========== ADMIN ==========
         $this->createUser('admin', 'Administrator', 'admin', null);
+        $this->createUser('07150574', 'Rona Kurniawan', 'admin', null);
+        $this->createUser('3123084', 'Ronald Irwanto', 'admin', null);
 
         // ========== AVP ==========
         $this->createUser('3032158', 'M. Dedy Arissandi', 'avp', $vm);
@@ -77,8 +74,9 @@ class UserSeeder extends Seeder
 
         // PJDP Buyers
         $this->createUser('3042327', 'Ade Sunarya', 'buyer', $pjdp);
-        $this->createUser('3052374', 'Maryono', 'buyer', $pjdp);
         $this->createUser('3123163', 'Aditya Pratama Putra', 'buyer', $pjdp);
+        $this->createUser('3052374', 'Maryono', 'staff', $pjdp);
+        $this->createUser('C07221057', 'Eggy Bachrudin ', 'buyer', $pjdp);
 
         // PBJ1 Buyers
         $this->createUser('3072505', 'Cholida Maranani', 'buyer', $pbj1);
@@ -93,21 +91,15 @@ class UserSeeder extends Seeder
         $this->createUser('3102923', 'Gugun Gunara Taupik', 'buyer', $pbj2);
         $this->createUser('3102929', 'Tathu Rabiatul A', 'buyer', $pbj2);
         $this->createUser('3102950', 'Erwin Herdiyana', 'buyer', $pbj2);
-        $this->createUser('07221059', 'Mutia Virginia', 'buyer', $pbj2);
+        $this->createUser('07221059', 'Mutia Virgiana', 'buyer', $pbj2);
+        $this->createUser('07221058', 'Erik Erdiana', 'buyer', $pbj2);
 
         // VM Buyers
         $this->createUser('3102945', 'Annafi Rohadi', 'buyer', $vm);
-        $this->createUser('3123110', 'Muhamad Adam Zamzami', 'buyer', $vm);
-        $this->createUser('3921960', 'Bambang Ahmad Makmur', 'buyer', $vm);
-        $this->createUser('07150574', 'Rona Kurniawan', 'buyer', $vm);
-        $this->createUser('07251218', 'Debora Geraldyn Br Tobing', 'buyer', $vm);
+        $this->createUser('3123110', 'Muhamad Adam Zamzami', 'staff', $vm);
+        $this->createUser('3921960', 'Bambang Ahmad Makmur', 'staff', $vm);
+        $this->createUser('07251218', 'Debora Geraldyn Br Tobing', 'staff', $vm);
 
-        // Dep. PBJ Buyers
-        $this->createUser('3123084', 'Ronald Irwanto', 'buyer', $depPbj);
-        $this->createUser('C006210000', 'Dep. Pengadaan Barang & Jasa', 'buyer', $depPbj);
-
-        // Staff Buyers
-        $this->createUser('05070275', 'Titin Haryati', 'buyer', $staff);
     }
 
     /**

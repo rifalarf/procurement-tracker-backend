@@ -103,45 +103,89 @@ class ProcurementItemController extends Controller
             $query->whereDate('tgl_terima_dokumen', '<=', $request->end_date);
         }
 
-        // "Hanya Saya"  filter - show ONLY items assigned to current buyer
-        // Does NOT include unassigned items
         $user = auth()->user();
+
+        // For AVP and Buyer, if they do not explicitly select a department, frontend will manage the default filter.
+        // We no longer force $query->whereIn('department_id', ...) for AVP and Buyer here.
+        // They can freely query any department based on request filters.
+
+        // "Hanya Saya" (only_mine) filter for Buyers
         if ($request->input('only_mine') === 'true' && $user && $user->role === 'buyer') {
-            // Only items assigned to this buyer (via buyer relationship -> user_id)
-            $query->whereHas('buyer', function ($buyerQuery) use ($user) {
-                $buyerQuery->where('user_id', $user->id);
+            $departmentIds = $user->departments->pluck('id');
+
+            $query->where(function ($q) use ($user, $departmentIds) {
+                // Condition 1: Items explicitly assigned to this buyer
+                $q->whereHas('buyer', function ($buyerQuery) use ($user) {
+                    $buyerQuery->where('user_id', $user->id);
+                })
+                    // Condition 2: Items unassigned BUT within the buyer's department
+                    ->orWhere(function ($subQ) use ($departmentIds) {
+                        $subQ->whereNull('buyer_id')
+                            ->whereIn('department_id', $departmentIds);
+                    });
             });
         }
-
-        // AVP can only see items from their assigned departments
-        if ($user && $user->role === 'avp') {
-            $departmentIds = $user->departments()->pluck('departments.id')->toArray();
-            if (!empty($departmentIds)) {
-                $query->whereIn('department_id', $departmentIds);
-            } else {
-                // If AVP has no departments assigned, show no items
-                $query->whereRaw('1 = 0');
-            }
-        }
-
 
         // Filter by user (requester)
         if ($userRequester = $request->input('user_requester')) {
             $query->where('user_requester', 'like', "%{$userRequester}%");
         }
 
+        // Filter by custom fields (only filterable ones)
+        $filterableFields = CustomFieldConfig::getFilterableFieldNames();
+        foreach ($filterableFields as $fieldName) {
+            if ($value = $request->input($fieldName)) {
+                if ($fieldName === 'custom_field_1') {
+                    if ($value === 'Jasa') {
+                        $query->where(function ($q) {
+                            $q->whereIn('custom_field_1', ['D', 'Jasa', 'jasa'])
+                                ->orWhere(function ($subQ) {
+                                    $subQ->where(function ($q2) {
+                                        $q2->whereNull('custom_field_1')
+                                            ->orWhere('custom_field_1', '');
+                                    })
+                                        ->where(function ($q3) {
+                                            $q3->whereNull('mat_code')
+                                                ->orWhere('mat_code', '');
+                                        });
+                                });
+                        });
+                    } elseif ($value === 'Barang') {
+                        $query->where(function ($q) {
+                            $q->whereIn('custom_field_1', ['Barang', 'barang'])
+                                ->orWhere(function ($subQ) {
+                                    $subQ->where(function ($q2) {
+                                        $q2->whereNull('custom_field_1')
+                                            ->orWhere('custom_field_1', '');
+                                    })
+                                        ->whereNotNull('mat_code')
+                                        ->where('mat_code', '!=', '');
+                                });
+                        });
+                    }
+                } else {
+                    $query->where($fieldName, $value);
+                }
+            }
+        }
+
         // Sorting - validate against whitelist to prevent SQL injection
-        $sortBy = $request->input('sort_by', 'created_at');
+        $sortBy = $request->input('sort_by', 'tgl_terima_dokumen');
         $sortDir = strtolower($request->input('sort_dir', 'desc'));
 
         if (!in_array($sortBy, self::ALLOWED_SORT_COLUMNS)) {
-            $sortBy = 'created_at';
+            $sortBy = 'tgl_terima_dokumen';
         }
         if (!in_array($sortDir, ['asc', 'desc'])) {
             $sortDir = 'desc';
         }
 
         $query->orderBy($sortBy, $sortDir);
+
+        // Add secondary sort for stable ordering when dates are identical
+        if ($sortBy === 'tgl_terima_dokumen') {
+            $query->orderBy('id', 'asc');
+        }
 
         // Pagination
         $perPage = min($request->input('per_page', 20), 100);
@@ -185,6 +229,45 @@ class ProcurementItemController extends Controller
 
         return response()->json([
             'data' => $users,
+        ]);
+    }
+
+    /**
+     * Get unique values for a custom field (for filter dropdowns)
+     */
+    public function getCustomFieldValues(string $fieldName): JsonResponse
+    {
+        // Validate the field name is a valid custom field
+        $allowedFields = ['custom_field_1', 'custom_field_2', 'custom_field_3', 'custom_field_4', 'custom_field_5'];
+        if (!in_array($fieldName, $allowedFields)) {
+            return response()->json(['data' => []], 400);
+        }
+
+        // Check if this field is filterable
+        $config = CustomFieldConfig::where('field_name', $fieldName)
+            ->where('is_active', true)
+            ->where('is_filterable', true)
+            ->first();
+
+        if (!$config) {
+            return response()->json(['data' => []]);
+        }
+
+        // Output translated dropdown values explicitly for B/J instead of pulling literal DB strings
+        if ($fieldName === 'custom_field_1') {
+            return response()->json([
+                'data' => ['Barang', 'Jasa'],
+            ]);
+        }
+
+        $values = ProcurementItem::whereNotNull($fieldName)
+            ->where($fieldName, '!=', '')
+            ->distinct()
+            ->orderBy($fieldName)
+            ->pluck($fieldName);
+
+        return response()->json([
+            'data' => $values,
         ]);
     }
 
@@ -240,6 +323,12 @@ class ProcurementItemController extends Controller
             }
         } elseif ($user->role === 'avp') {
             // AVP can only update fields they have permission to edit (from field_permissions table)
+            // Map emergency field BEFORE filtering (frontend sends 'emergency', DB uses 'is_emergency')
+            if (isset($validated['emergency'])) {
+                $validated['is_emergency'] = $validated['emergency'];
+                unset($validated['emergency']);
+            }
+
             $allowedFields = FieldPermission::getEditableFields('avp');
             $validated = array_intersect_key($validated, array_flip($allowedFields));
 

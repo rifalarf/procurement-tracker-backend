@@ -50,7 +50,6 @@ return [
     */
     'eligibility_actions' => [
         'rebid' => [
-            'RFQ',
             'Bid Open',
             'Evaluasi Teknis & Komersial',
             'Negosiasi',

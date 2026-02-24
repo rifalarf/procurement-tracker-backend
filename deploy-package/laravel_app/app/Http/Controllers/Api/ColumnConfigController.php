@@ -29,8 +29,8 @@ class ColumnConfigController extends Controller
             if ($config->isCustomField()) {
                 $customConfig = $customFieldConfigs->get($config->field_name);
                 $data['custom_field_active'] = $customConfig ? $customConfig->is_active : false;
-                // Use custom field label if ColumnConfig label is empty
-                if (empty($config->label) && $customConfig && $customConfig->label) {
+                // Always prefer custom field config label over column config label
+                if ($customConfig && $customConfig->label) {
                     $data['label'] = $customConfig->label;
                 }
             }
@@ -61,10 +61,10 @@ class ColumnConfigController extends Controller
             $data = $config->toArray();
             $data['is_custom_field'] = $config->isCustomField();
 
-            // Use custom field label if ColumnConfig label is empty
+            // Always prefer custom field config label over column config label
             if ($config->isCustomField()) {
                 $customConfig = $customFieldConfigs->get($config->field_name);
-                if (empty($config->label) && $customConfig && $customConfig->label) {
+                if ($customConfig && $customConfig->label) {
                     $data['label'] = $customConfig->label;
                 }
             }
@@ -95,10 +95,10 @@ class ColumnConfigController extends Controller
             $data = $config->toArray();
             $data['is_custom_field'] = $config->isCustomField();
 
-            // Use custom field label if ColumnConfig label is empty
+            // Always prefer custom field config label over column config label
             if ($config->isCustomField()) {
                 $customConfig = $customFieldConfigs->get($config->field_name);
-                if (empty($config->label) && $customConfig && $customConfig->label) {
+                if ($customConfig && $customConfig->label) {
                     $data['label'] = $customConfig->label;
                 }
             }

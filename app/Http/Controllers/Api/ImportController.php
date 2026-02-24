@@ -506,7 +506,7 @@ class ImportController extends Controller
         // Add example data
         $exampleData = [
             'PR-001',           // No PR
-            'Barang',           // B/J
+            '',                 // B/J
             'K',                // Acc
             'MAT-001',          // Mat Code
             'Contoh Barang',    // Nama Barang
@@ -520,7 +520,7 @@ class ImportController extends Controller
             '2024-01-15',       // Tanggal Terima Dokumen
             'PROCX',            // PROCX/MANUAL
             'Buyer Name',       // Buyer
-            'Pending',          // Status
+            'Negosiasi',          // Status
             '2024-01-20',       // Tanggal Status
             'No',               // EMERGENCY
             'PO-001',           // NO PO
