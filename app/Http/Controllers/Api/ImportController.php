@@ -1046,19 +1046,23 @@ class ImportController extends Controller
 
         // Canonical names from fix_data.xlsx
         $mapping = [
+            'ade' => 'Ade Sunarya',
+            'aditya' => 'Aditya Pratama Putra',
             'akbar' => 'Akbar Faturahman',
+            'annafi' => 'Annafi Rohadi',
             'ato' => 'Ato Heryanto',
             'cholida' => 'Cholida Maranani',
             'dian' => 'Dian Sholihat',
             'dicky' => 'Dicky Setiagraha',
-            'eggy' => 'Eggy Baharudin',
+            'eggy' => 'Eggy Bachrudin',
             'erik' => 'Erik Erdiana',
-            'erwin' => 'Erwin Herdiana',
-            'gugun' => 'Gugun GT',
+            'erwin' => 'Erwin Herdiyana',
+            'eva' => 'Eva Sepsilia Sari',
+            'gugun' => 'Gugun Gunara Taupik',
             'heru' => 'Heru Winata Praja',
             'mutia' => 'Mutia Virgiana',
-            'nawang' => 'Nawang Wulan',
-            'tathu' => 'Tathu RA',
+            'nawang' => 'Nawang Wulan Jannatul Firdaus',
+            'tathu' => 'Tathu Rabiatul A',
         ];
 
         $lowerName = strtolower($name);
