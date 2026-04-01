@@ -74,7 +74,6 @@ class UserSeeder extends Seeder
         $this->createUser('3042327', 'Ade Sunarya', 'buyer', $pjdp);
         $this->createUser('3123163', 'Aditya Pratama Putra', 'buyer', $pjdp);
         $this->createUser('3052374', 'Maryono', 'staff', $pjdp);
-        $this->createUser('C07221057', 'Eggy Bachrudin ', 'buyer', $pjdp);
 
         // PBJ1 Buyers
         $this->createUser('3072505', 'Cholida Maranani', 'buyer', $pbj1);
@@ -91,6 +90,7 @@ class UserSeeder extends Seeder
         $this->createUser('3102950', 'Erwin Herdiyana', 'buyer', $pbj2);
         $this->createUser('07221059', 'Mutia Virgiana', 'buyer', $pbj2);
         $this->createUser('07221058', 'Erik Erdiana', 'buyer', $pbj2);
+        $this->createUser('C07221057', 'Eggy Bachrudin', 'buyer', $pbj2);
 
         // VM Buyers
         $this->createUser('3102945', 'Annafi Rohadi', 'buyer', $vm);

@@ -267,7 +267,8 @@ if ($action) {
                 echo "Running master data seeders...\n";
                 $kernel->call('db:seed', ['--class' => 'DepartmentSeeder', '--force' => true]);
                 $kernel->call('db:seed', ['--class' => 'StatusSeeder', '--force' => true]);
-                $kernel->call('db:seed', ['--class' => 'BuyerSeeder', '--force' => true]);
+                $kernel->call('db:seed', ['--class' => 'UserSeeder', '--force' => true]);
+                $kernel->call('db:seed', ['--class' => 'PermissionSeeder', '--force' => true]);
                 echo $kernel->output();
                 break;
             
