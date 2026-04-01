@@ -22,6 +22,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ProcurementItemController extends Controller
 {
     /**
+     * Status names that represent PO/SPK (triggers auto tgl_po)
+     */
+    private const PO_STATUS_NAMES = ['PO / SPK', 'PO/SPK'];
+
+    /**
      * Allowed columns for sorting to prevent SQL injection
      */
     private const ALLOWED_SORT_COLUMNS = [
@@ -338,6 +343,20 @@ class ProcurementItemController extends Controller
 
         $validated['updated_by'] = $user->id;
 
+        // Auto-fill or clear tgl_po when status changes to/from PO/SPK via general update
+        if (isset($validated['status_id']) && $validated['status_id'] != $procurementItem->status_id) {
+            $newStatus = \App\Models\Status::find($validated['status_id']);
+            if ($newStatus && in_array($newStatus->name, self::PO_STATUS_NAMES)) {
+                $validated['tgl_po'] = now()->toDateString();
+            } else {
+                // Moving away from PO/SPK — clear tgl_po
+                $oldStatus = $procurementItem->status;
+                if ($oldStatus && in_array($oldStatus->name, self::PO_STATUS_NAMES)) {
+                    $validated['tgl_po'] = null;
+                }
+            }
+        }
+
         $procurementItem->update($validated);
 
         // Log activity
@@ -385,6 +404,9 @@ class ProcurementItemController extends Controller
 
         $procurementItem->status_id = $newStatusId;
         $procurementItem->updated_by = $request->user()->id;
+
+        // Auto-fill or clear tgl_po based on PO/SPK status
+        $this->syncTglPo($procurementItem, $newStatusId);
         $procurementItem->save();
 
         // Record status history if status actually changed AND is not a duplicate
@@ -672,6 +694,10 @@ class ProcurementItemController extends Controller
         $procurementItem->status_id = $newStatusId;
         $procurementItem->tgl_status = $changedAt;
         $procurementItem->updated_by = $request->user()->id;
+
+        // Auto-fill or clear tgl_po based on PO/SPK status
+        $this->syncTglPo($procurementItem, $newStatusId);
+
         $procurementItem->save();
 
         // Record history
@@ -701,6 +727,30 @@ class ProcurementItemController extends Controller
             'data' => new ProcurementItemResource($procurementItem->load(['department', 'buyer', 'status'])),
             'event_type' => $eventType,
         ]);
+    }
+
+    /**
+     * Auto-fill or clear tgl_po based on whether status is PO/SPK.
+     * Sets tgl_po to today when entering PO/SPK, clears it when leaving.
+     */
+    private function syncTglPo(ProcurementItem $item, ?int $newStatusId): void
+    {
+        if ($newStatusId === null) {
+            return;
+        }
+
+        $newStatus = \App\Models\Status::find($newStatusId);
+        if (!$newStatus) {
+            return;
+        }
+
+        if (in_array($newStatus->name, self::PO_STATUS_NAMES)) {
+            // Entering PO/SPK → set tgl_po to today
+            $item->tgl_po = now()->toDateString();
+        } else {
+            // Not PO/SPK → clear tgl_po (handles rollback scenario)
+            $item->tgl_po = null;
+        }
     }
 
     /**
