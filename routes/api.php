@@ -164,10 +164,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/purge-data', [SettingsController::class, 'purgeData']);
     });
 
-    // Field Permissions (admin only)
-    Route::middleware('role:admin')->prefix('field-permissions')->group(function () {
+    // Field Permissions (read-only for all authenticated roles)
+    Route::prefix('field-permissions')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\FieldPermissionController::class, 'index']);
         Route::get('/fields', [\App\Http\Controllers\Api\FieldPermissionController::class, 'fields']);
+    });
+
+    // Field Permissions Management (admin only)
+    Route::middleware('role:admin')->prefix('field-permissions')->group(function () {
         Route::put('/{permission}', [\App\Http\Controllers\Api\FieldPermissionController::class, 'update']);
         Route::post('/bulk-update', [\App\Http\Controllers\Api\FieldPermissionController::class, 'bulkUpdate']);
         Route::post('/reset', [\App\Http\Controllers\Api\FieldPermissionController::class, 'reset']);

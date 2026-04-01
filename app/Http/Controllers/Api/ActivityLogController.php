@@ -21,14 +21,30 @@ class ActivityLogController extends Controller
         $query = ActivityLog::with(['user', 'procurementItem'])
             ->orderBy('created_at', 'desc');
 
-        // AVP can only see logs from items in their assigned departments
+        // Non-admin users can only see logs from items in their assigned departments
         // BUT also include 'imported' logs (visible to everyone)
-        if ($user->role === 'avp') {
+        if ($user->role !== 'admin') {
             $departmentIds = $user->departments()->pluck('departments.id')->toArray();
             $query->where(function ($q) use ($departmentIds) {
                 $q->whereHas('procurementItem', function ($subQ) use ($departmentIds) {
                     $subQ->whereIn('department_id', $departmentIds);
                 })->orWhere('event_type', 'imported');
+            });
+        }
+
+        // Search
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                // Search in description
+                $q->where('description', 'like', "%{$search}%")
+                  // Or search in user name
+                  ->orWhereHas('user', function ($subQ) use ($search) {
+                      $subQ->where('name', 'like', "%{$search}%");
+                  })
+                  // Or search in procurement item PR number
+                  ->orWhereHas('procurementItem', function ($subQ) use ($search) {
+                      $subQ->where('no_pr', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -76,6 +92,26 @@ class ActivityLogController extends Controller
                 $subQ->whereIn('department_id', $departmentIds);
             })->orWhere('event_type', 'imported');
         });
+
+        // Search
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                  ->orWhereHas('procurementItem', function ($subQ) use ($search) {
+                      $subQ->where('no_pr', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Filter by event type
+        if ($eventType = $request->input('event_type')) {
+            $query->where('event_type', $eventType);
+        }
+
+        // Filter by user
+        if ($userId = $request->input('user_id')) {
+            $query->where('user_id', $userId);
+        }
 
         // Pagination
         $perPage = min($request->input('per_page', 20), 100);

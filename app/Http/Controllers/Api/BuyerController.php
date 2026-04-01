@@ -9,6 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use App\Models\ActivityLog;
+
 
 class BuyerController extends Controller
 {
@@ -18,12 +20,18 @@ class BuyerController extends Controller
      */
     public function index(): JsonResponse
     {
-        $buyers = Buyer::where('is_active', true)
+        $buyers = Buyer::with('user.departments:id')
+            ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'color', 'text_color', 'is_active', 'user_id']);
 
         return response()->json([
-            'data' => $buyers,
+            'data' => $buyers->map(function (\App\Models\Buyer $buyer) {
+                $buyerArray = $buyer->toArray();
+                $buyerArray['department_ids'] = $buyer->user ? $buyer->user->departments->pluck('id')->toArray() : [];
+                unset($buyerArray['user']);
+                return $buyerArray;
+            }),
         ]);
     }
 
@@ -59,6 +67,14 @@ class BuyerController extends Controller
                 'user_id' => $user->id,
             ]);
 
+            ActivityLog::create([
+                'user_id' => request()->user()?->id ?? null,
+                'procurement_item_id' => null,
+                'event_type' => 'created',
+                'description' => 'Admin menambahkan buyer baru: ' . $buyer->name,
+                'new_values' => $buyer->toArray(),
+            ]);
+
             return response()->json([
                 'message' => 'Buyer created successfully',
                 'data' => $buyer,
@@ -78,6 +94,8 @@ class BuyerController extends Controller
         ]);
 
         DB::transaction(function () use ($buyer, $validated) {
+            $oldValues = $buyer->only(['name', 'color', 'is_active']);
+
             // Update buyer record
             $buyer->update($validated);
 
@@ -89,6 +107,15 @@ class BuyerController extends Controller
                     'is_active' => $validated['is_active'] ?? $buyer->user->is_active,
                 ]);
             }
+
+            ActivityLog::create([
+                'user_id' => request()->user()?->id ?? null,
+                'procurement_item_id' => null,
+                'event_type' => 'edited',
+                'description' => 'Admin mengubah data buyer: ' . $buyer->name,
+                'old_values' => $oldValues,
+                'new_values' => $buyer->refresh()->only(['name', 'color', 'is_active']),
+            ]);
         });
 
         return response()->json([
@@ -110,6 +137,13 @@ class BuyerController extends Controller
             if ($buyer->user_id && $buyer->user) {
                 $buyer->user->update(['is_active' => false]);
             }
+
+            ActivityLog::create([
+                'user_id' => request()->user()?->id ?? null,
+                'procurement_item_id' => null,
+                'event_type' => 'deleted',
+                'description' => 'Admin menonaktifkan buyer: ' . $buyer->name,
+            ]);
         });
 
         return response()->json([

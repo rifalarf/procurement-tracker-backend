@@ -43,8 +43,6 @@ class UserSeeder extends Seeder
         'Muhamad Adam Zamzami' => ['color' => '#ffedd5', 'text_color' => '#9a3412'], // Orange
         'Bambang Ahmad Makmur' => ['color' => '#dcfce7', 'text_color' => '#166534'], // Green
         'Rona Kurniawan' => ['color' => '#f3e8ff', 'text_color' => '#6b21a8'],       // Purple
-        'Debora Geraldyn Br Tobing' => ['color' => '#fef9c3', 'text_color' => '#854d0e'], // Yellow
-
         // VP
         'Ronald Irwanto' => ['color' => '#dbeafe', 'text_color' => '#1e40af'],       // Blue
     ];
@@ -98,7 +96,6 @@ class UserSeeder extends Seeder
         $this->createUser('3102945', 'Annafi Rohadi', 'buyer', $vm);
         $this->createUser('3123110', 'Muhamad Adam Zamzami', 'staff', $vm);
         $this->createUser('3921960', 'Bambang Ahmad Makmur', 'staff', $vm);
-        $this->createUser('07251218', 'Debora Geraldyn Br Tobing', 'staff', $vm);
 
     }
 
