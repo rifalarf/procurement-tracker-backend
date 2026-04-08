@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use App\Models\ActivityLog;
 
 class UserController extends Controller
 {
@@ -103,6 +104,14 @@ class UserController extends Controller
             ]);
         }
 
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'created',
+            'description' => 'Admin menambahkan user baru: ' . $user->name,
+            'new_values' => $user->toArray(),
+        ]);
+
         return response()->json([
             'message' => 'User created successfully',
             'data' => new UserResource($user->load(['departments', 'buyer'])),
@@ -131,6 +140,8 @@ class UserController extends Controller
             'username' => $validated['username'],
             'role' => $validated['role'],
         ];
+
+        $oldValues = $user->only(['name', 'username', 'role', 'is_active']);
 
         if (isset($validated['is_active'])) {
             $updateData['is_active'] = $validated['is_active'];
@@ -177,6 +188,15 @@ class UserController extends Controller
             }
         }
 
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'edited',
+            'description' => 'Admin mengubah data user: ' . $user->name,
+            'old_values' => $oldValues,
+            'new_values' => $user->refresh()->only(['name', 'username', 'role', 'is_active']),
+        ]);
+
         return response()->json([
             'message' => 'User updated successfully',
             'data' => new UserResource($user->load(['departments', 'buyer'])),
@@ -203,6 +223,13 @@ class UserController extends Controller
         $user->departments()->detach();
         $user->tokens()->delete();
         $user->delete();
+
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'deleted',
+            'description' => 'Admin menghapus user: ' . $user->name,
+        ]);
 
         return response()->json([
             'message' => 'User deleted successfully',

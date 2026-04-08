@@ -22,9 +22,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ProcurementItemController extends Controller
 {
     /**
-     * Status names that represent PO/SPK (triggers auto tgl_po)
+     * Status names that trigger auto tgl_po (PO/SPK or SELESAI)
      */
-    private const PO_STATUS_NAMES = ['PO / SPK', 'PO/SPK'];
+    private const PO_STATUS_NAMES = ['PO / SPK', 'PO/SPK', 'SELESAI', 'Selesai', 'selesai'];
 
     /**
      * Allowed columns for sorting to prevent SQL injection
@@ -118,9 +118,31 @@ class ProcurementItemController extends Controller
         if ($request->input('only_mine') === 'true' && $user && $user->role === 'buyer') {
             // Fetch the specific buyer IDs associated with this logged-in user
             $buyerIds = \App\Models\Buyer::where('user_id', $user->id)->pluck('id');
+            $departmentIds = $user->departments()->pluck('departments.id')->toArray();
 
-            // Strictly filter by explicitly assigned items
-            $query->whereIn('buyer_id', $buyerIds);
+            // Show:
+            // 1) Items assigned to this buyer profile(s)
+            // 2) Unassigned items in buyer's departments
+            $query->where(function ($q) use ($buyerIds, $departmentIds) {
+                $hasBuyerIds = $buyerIds->isNotEmpty();
+                $hasDepartmentIds = !empty($departmentIds);
+
+                if ($hasBuyerIds) {
+                    $q->whereIn('buyer_id', $buyerIds);
+                }
+
+                if ($hasDepartmentIds) {
+                    $method = $hasBuyerIds ? 'orWhere' : 'where';
+                    $q->{$method}(function ($subQ) use ($departmentIds) {
+                        $subQ->whereNull('buyer_id')
+                            ->whereIn('department_id', $departmentIds);
+                    });
+                }
+
+                if (!$hasBuyerIds && !$hasDepartmentIds) {
+                    $q->whereRaw('1 = 0');
+                }
+            });
         }
 
         // Filter by user (requester)
@@ -304,6 +326,7 @@ class ProcurementItemController extends Controller
         $this->authorize('update', $procurementItem);
 
         $oldValues = $procurementItem->toArray();
+        $oldStatusId = $procurementItem->status_id;
         $user = $request->user();
         $validated = $request->validated();
 
@@ -358,6 +381,31 @@ class ProcurementItemController extends Controller
         }
 
         $procurementItem->update($validated);
+
+        // Record status history when status is changed through Edit Item flow
+        if (array_key_exists('status_id', $validated) && $validated['status_id'] !== $oldStatusId) {
+            $newStatusId = $validated['status_id'];
+
+            // Prevent duplicate consecutive status entries
+            $lastHistoryEntry = StatusHistory::where('procurement_item_id', $procurementItem->id)
+                ->orderBy('changed_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            $isDuplicate = $lastHistoryEntry && $lastHistoryEntry->new_status_id === $newStatusId;
+
+            if (!$isDuplicate) {
+                StatusHistory::create([
+                    'procurement_item_id' => $procurementItem->id,
+                    'old_status_id' => $oldStatusId,
+                    'new_status_id' => $newStatusId,
+                    'changed_by' => $request->user()->id,
+                    'changed_at' => now(),
+                    'notes' => null,
+                    'event_type' => 'MANUAL',
+                ]);
+            }
+        }
 
         // Log activity
         $this->logActivity($request, $procurementItem, 'edited', 'Updated procurement item: ' . $procurementItem->no_pr, $oldValues, $procurementItem->toArray());
@@ -529,6 +577,7 @@ class ProcurementItemController extends Controller
 
         $validated = $request->validate([
             'notes' => 'nullable|string|max:1000',
+            'no_po' => 'nullable|string|max:50',
         ]);
 
         $coreStatuses = config('procurement_flow.core_statuses_in_order', []);
@@ -550,7 +599,8 @@ class ProcurementItemController extends Controller
                 $procurementItem,
                 $firstStatus->id,
                 'ADVANCE',
-                $validated['notes'] ?? null
+                $validated['notes'] ?? null,
+                $validated['no_po'] ?? null
             );
         }
 
@@ -598,7 +648,8 @@ class ProcurementItemController extends Controller
             $procurementItem,
             $nextStatus->id,
             'ADVANCE',
-            $validated['notes'] ?? null
+            $validated['notes'] ?? null,
+            $validated['no_po'] ?? null
         );
     }
 
@@ -685,7 +736,8 @@ class ProcurementItemController extends Controller
         ProcurementItem $procurementItem,
         int $newStatusId,
         string $eventType,
-        ?string $notes = null
+        ?string $notes = null,
+        ?string $noPo = null
     ): JsonResponse {
         $oldStatusId = $procurementItem->status_id;
         $changedAt = now();
@@ -694,6 +746,11 @@ class ProcurementItemController extends Controller
         $procurementItem->status_id = $newStatusId;
         $procurementItem->tgl_status = $changedAt;
         $procurementItem->updated_by = $request->user()->id;
+
+        // Update no_po if provided
+        if ($noPo !== null) {
+            $procurementItem->no_po = $noPo;
+        }
 
         // Auto-fill or clear tgl_po based on PO/SPK status
         $this->syncTglPo($procurementItem, $newStatusId);
@@ -830,10 +887,24 @@ class ProcurementItemController extends Controller
         // Fields to skip in comparison
         $skipFields = ['updated_at', 'updated_by', 'created_at', 'created_by', 'id'];
 
-        foreach ($newValues as $key => $newValue) {
+        // Only compare business fields to avoid noisy relation/object dumps from model->toArray().
+        $allowedKeys = array_keys($fieldLabels);
+        foreach (array_keys($newValues) as $k) {
+            if (str_starts_with($k, 'custom_field_')) {
+                $allowedKeys[] = $k;
+            }
+        }
+
+        foreach (array_unique($allowedKeys) as $key) {
             if (in_array($key, $skipFields)) {
                 continue;
             }
+
+            if (!array_key_exists($key, $oldValues) && !array_key_exists($key, $newValues)) {
+                continue;
+            }
+
+            $newValue = $newValues[$key] ?? null;
 
             $oldValue = $oldValues[$key] ?? null;
 
@@ -846,7 +917,11 @@ class ProcurementItemController extends Controller
                 $displayOld = $this->formatValueForDisplay($key, $oldValue);
                 $displayNew = $this->formatValueForDisplay($key, $newValue);
 
-                $changes[] = "{$label} diubah dari \"{$displayOld}\" ke \"{$displayNew}\"";
+                if ($key === 'status_id') {
+                    $changes[] = "Status diubah dari {$displayOld} ke {$displayNew}";
+                } else {
+                    $changes[] = "{$label} diubah dari \"{$displayOld}\" ke \"{$displayNew}\"";
+                }
             }
         }
 
@@ -876,6 +951,17 @@ class ProcurementItemController extends Controller
     private function formatValueForDisplay(string $field, $value): string
     {
         if (is_null($value) || $value === '') {
+            return '-';
+        }
+
+        // If value is an object/array payload from relation or frontend, keep display concise.
+        if (is_array($value)) {
+            if (array_key_exists('name', $value) && !empty($value['name'])) {
+                return (string) $value['name'];
+            }
+            if (array_key_exists('id', $value) && !empty($value['id'])) {
+                return (string) $value['id'];
+            }
             return '-';
         }
 
@@ -953,11 +1039,31 @@ class ProcurementItemController extends Controller
             $query->whereDate('tgl_terima_dokumen', '<=', $request->end_date);
         }
 
-        // "Hanya Saya" filter - show ONLY items assigned to current buyer
+        // "Hanya Saya" filter for Buyers
         $currentUser = auth()->user();
         if ($request->input('only_mine') === 'true' && $currentUser && $currentUser->role === 'buyer') {
-            $query->whereHas('buyer', function ($buyerQuery) use ($currentUser) {
-                $buyerQuery->where('user_id', $currentUser->id);
+            $buyerIds = \App\Models\Buyer::where('user_id', $currentUser->id)->pluck('id');
+            $departmentIds = $currentUser->departments()->pluck('departments.id')->toArray();
+
+            $query->where(function ($q) use ($buyerIds, $departmentIds) {
+                $hasBuyerIds = $buyerIds->isNotEmpty();
+                $hasDepartmentIds = !empty($departmentIds);
+
+                if ($hasBuyerIds) {
+                    $q->whereIn('buyer_id', $buyerIds);
+                }
+
+                if ($hasDepartmentIds) {
+                    $method = $hasBuyerIds ? 'orWhere' : 'where';
+                    $q->{$method}(function ($subQ) use ($departmentIds) {
+                        $subQ->whereNull('buyer_id')
+                            ->whereIn('department_id', $departmentIds);
+                    });
+                }
+
+                if (!$hasBuyerIds && !$hasDepartmentIds) {
+                    $q->whereRaw('1 = 0');
+                }
             });
         }
 

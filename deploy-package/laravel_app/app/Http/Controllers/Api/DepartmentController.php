@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\ActivityLog;
 
 class DepartmentController extends Controller
 {
@@ -35,6 +36,14 @@ class DepartmentController extends Controller
 
         $department = Department::create($validated);
 
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'created',
+            'description' => 'Admin menambahkan departemen baru: ' . $department->name,
+            'new_values' => $department->toArray(),
+        ]);
+
         return response()->json([
             'message' => 'Department created successfully',
             'data' => $department,
@@ -52,7 +61,18 @@ class DepartmentController extends Controller
             'is_active' => 'boolean',
         ]);
 
+        $oldValues = $department->only(['name', 'description', 'is_active']);
+
         $department->update($validated);
+
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'edited',
+            'description' => 'Admin mengubah data departemen: ' . $department->name,
+            'old_values' => $oldValues,
+            'new_values' => $department->refresh()->only(['name', 'description', 'is_active']),
+        ]);
 
         return response()->json([
             'message' => 'Department updated successfully',
@@ -73,7 +93,15 @@ class DepartmentController extends Controller
             ], 422);
         }
 
+        $departmentName = $department->name;
         $department->delete();
+
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'deleted',
+            'description' => 'Admin menghapus departemen: ' . $departmentName,
+        ]);
 
         return response()->json([
             'message' => 'Department deleted successfully',

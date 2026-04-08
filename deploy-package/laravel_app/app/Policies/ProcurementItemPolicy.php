@@ -8,6 +8,20 @@ use App\Models\User;
 class ProcurementItemPolicy
 {
     /**
+     * Determine if AVP is authorized for this item based on department
+     */
+    private function isAvpAuthorizedForItem(User $user, ProcurementItem $item): bool
+    {
+        if ($item->department_id === null) {
+            return true; // Optionally allow unassigned department items, but typically AVP requires exact match
+            // To strictly limit to assigned departments only:
+            // return false; 
+        }
+        $departmentIds = $user->departments()->pluck('departments.id')->toArray();
+        return in_array($item->department_id, $departmentIds);
+    }
+
+    /**
      * Determine if user can view the item
      */
     public function view(User $user, ProcurementItem $item): bool
@@ -33,9 +47,14 @@ class ProcurementItemPolicy
      */
     public function update(User $user, ProcurementItem $item): bool
     {
-        // Admin, AVP, and Staff can update items
-        if (in_array($user->role, ['admin', 'avp', 'staff'])) {
+        // Admin and Staff can update items
+        if (in_array($user->role, ['admin', 'staff'])) {
             return true;
+        }
+
+        // AVP can only update items from their assigned departments
+        if ($user->role === 'avp') {
+            return $this->isAvpAuthorizedForItem($user, $item);
         }
 
         // Buyer can update unassigned items or their own assigned items
@@ -63,8 +82,12 @@ class ProcurementItemPolicy
      */
     public function rebid(User $user, ProcurementItem $item): bool
     {
-        if (in_array($user->role, ['admin', 'avp'])) {
+        if ($user->role === 'admin') {
             return true;
+        }
+
+        if ($user->role === 'avp') {
+            return $this->isAvpAuthorizedForItem($user, $item);
         }
 
         // Buyer can rebid unassigned items or their own assigned items
@@ -85,8 +108,12 @@ class ProcurementItemPolicy
      */
     public function cancel(User $user, ProcurementItem $item): bool
     {
-        if (in_array($user->role, ['admin', 'avp'])) {
+        if ($user->role === 'admin') {
             return true;
+        }
+
+        if ($user->role === 'avp') {
+            return $this->isAvpAuthorizedForItem($user, $item);
         }
 
         // Buyer can cancel unassigned items or their own assigned items

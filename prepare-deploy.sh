@@ -68,7 +68,7 @@ APP_KEY=base64:tLhVfQp/ZqL2VhVUYDNdz6Moh7K9d/Q1nv0qLu4XBSY=
 APP_DEBUG=false
 APP_URL=https://pengadaan.matrifix.site
 
-FRONTEND_URL=https://procurehub-kujang.vercel.app
+FRONTEND_URL=https://procurehub.my.id
 
 APP_LOCALE=en
 APP_FALLBACK_LOCALE=en
@@ -145,6 +145,10 @@ cat > "${PUBLIC_DIR}/.htaccess" << 'HTACCESS'
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    # Handle OPTIONS preflight requests - pass to Laravel for CORS headers
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^ index.php [L]
+
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
@@ -154,6 +158,45 @@ cat > "${PUBLIC_DIR}/.htaccess" << 'HTACCESS'
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+# Disable directory browsing
+Options -Indexes
+
+# Prevent access to .env file
+<Files .env>
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Prevent access to sensitive files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Enable GZIP compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Enable XSS protection
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Referrer policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # NOTE: CORS is fully handled by Laravel (config/cors.php)
+    # Do NOT set Access-Control-Allow-Origin here as it would override
+    # Laravel's dynamic origin checking and break www vs non-www support.
 </IfModule>
 HTACCESS
 

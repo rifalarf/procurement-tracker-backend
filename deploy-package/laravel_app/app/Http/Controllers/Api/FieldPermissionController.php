@@ -8,6 +8,7 @@ use App\Models\FieldPermission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use App\Models\ActivityLog;
 
 class FieldPermissionController extends Controller
 {
@@ -177,10 +178,20 @@ class FieldPermissionController extends Controller
             ], 422);
         }
 
+        $oldValues = $permission->only(['can_view', 'can_edit']);
         $permission->update($validated);
         
         // Clear cache for this role
         FieldPermission::clearCache($permission->role);
+
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'edited',
+            'description' => "Admin mengubah izin kolom {$permission->field_name} untuk role {$permission->role}",
+            'old_values' => $oldValues,
+            'new_values' => $permission->refresh()->only(['can_view', 'can_edit']),
+        ]);
 
         return response()->json([
             'message' => 'Permission updated successfully',
@@ -234,6 +245,15 @@ class FieldPermissionController extends Controller
             FieldPermission::clearCache($role);
         }
 
+        if ($updatedCount > 0) {
+            ActivityLog::create([
+                'user_id' => request()->user()?->id ?? null,
+                'procurement_item_id' => null,
+                'event_type' => 'edited',
+                'description' => "Admin memperbarui massal {$updatedCount} izin kolom",
+            ]);
+        }
+
         $response = [
             'message' => "Updated {$updatedCount} permissions",
             'updated_count' => $updatedCount,
@@ -256,6 +276,13 @@ class FieldPermissionController extends Controller
             Artisan::call('db:seed', [
                 '--class' => 'Database\\Seeders\\PermissionSeeder',
                 '--force' => true,
+            ]);
+
+            ActivityLog::create([
+                'user_id' => request()->user()?->id ?? null,
+                'procurement_item_id' => null,
+                'event_type' => 'edited',
+                'description' => 'Admin mereset seluruh izin kolom ke kondisi awal (default)',
             ]);
 
             return response()->json([

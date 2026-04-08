@@ -73,16 +73,23 @@ class DashboardController extends Controller
             }
         }
 
-        // Calculate KPI Cards
-        $totalPr = $query->count();
-        $totalNilai = (clone $query)->sum('nilai');
+        // Calculate KPI Cards (Combined)
+        $aggregate = (clone $query)->selectRaw('COUNT(*) as total_pr, SUM(nilai) as total_nilai')->first();
+        $totalPr = $aggregate->total_pr ?? 0;
+        $totalNilai = $aggregate->total_nilai ?? 0;
 
-        // Get status distribution (only active statuses)
+        // Get status distribution using a single GROUP BY query
+        $statusCounts = (clone $query)
+            ->whereNotNull('status_id')
+            ->selectRaw('status_id, COUNT(*) as count')
+            ->groupBy('status_id')
+            ->pluck('count', 'status_id');
+
         $statuses = Status::where('is_active', true)->orderBy('sort_order')->get();
         $statusDistribution = [];
 
         foreach ($statuses as $status) {
-            $count = (clone $query)->where('status_id', $status->id)->count();
+            $count = $statusCounts->get($status->id, 0);
             if ($count > 0) {
                 $statusDistribution[] = [
                     'name' => $status->name,

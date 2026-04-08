@@ -506,7 +506,7 @@ class ImportController extends Controller
         // Add example data
         $exampleData = [
             'PR-001',           // No PR
-            'Barang',           // B/J
+            '',                 // B/J
             'K',                // Acc
             'MAT-001',          // Mat Code
             'Contoh Barang',    // Nama Barang
@@ -520,7 +520,7 @@ class ImportController extends Controller
             '2024-01-15',       // Tanggal Terima Dokumen
             'PROCX',            // PROCX/MANUAL
             'Buyer Name',       // Buyer
-            'Pending',          // Status
+            'Negosiasi',          // Status
             '2024-01-20',       // Tanggal Status
             'No',               // EMERGENCY
             'PO-001',           // NO PO
@@ -1036,6 +1036,9 @@ class ImportController extends Controller
     /**
      * Normalize buyer name based on common aliases/variations
      * Source: fix_data.xlsx
+     *
+     * Uses whole-word matching to prevent partial-word false positives,
+     * e.g. "Erik Erdiana" should NOT match alias "dian" (from "Erdiana").
      */
     private function normalizeBuyerName(string $name): string
     {
@@ -1044,28 +1047,33 @@ class ImportController extends Controller
             return $name;
         }
 
-        // Canonical names from fix_data.xlsx
+        // Canonical names — keyed by first-name alias (must match as whole word)
         $mapping = [
-            'akbar' => 'Akbar Faturahman',
-            'ato' => 'Ato Heryanto',
+            'ade'     => 'Ade Sunarya',
+            'aditya'  => 'Aditya Pratama Putra',
+            'akbar'   => 'Akbar Faturahman',
+            'annafi'  => 'Annafi Rohadi',
+            'ato'     => 'Ato Heryanto',
             'cholida' => 'Cholida Maranani',
-            'dian' => 'Dian Sholihat',
-            'dicky' => 'Dicky Setiagraha',
-            'eggy' => 'Eggy Baharudin',
-            'erik' => 'Erik Erdiana',
-            'erwin' => 'Erwin Herdiana',
-            'gugun' => 'Gugun GT',
-            'heru' => 'Heru Winata Praja',
-            'mutia' => 'Mutia Virgiana',
-            'nawang' => 'Nawang Wulan',
-            'tathu' => 'Tathu RA',
+            'dian'    => 'Dian Sholihat',
+            'dicky'   => 'Dicky Setiagraha',
+            'eggy'    => 'Eggy Bachrudin',
+            'erik'    => 'Erik Erdiana',
+            'erwin'   => 'Erwin Herdiyana',
+            'eva'     => 'Eva Sepsilia Sari',
+            'gugun'   => 'Gugun Gunara Taupik',
+            'heru'    => 'Heru Winata Praja',
+            'mutia'   => 'Mutia Virgiana',
+            'nawang'  => 'Nawang Wulan Jannatul Firdaus',
+            'tathu'   => 'Tathu Rabiatul A',
         ];
 
         $lowerName = strtolower($name);
 
         foreach ($mapping as $key => $target) {
-            // Check for exact match of alias or if the alias is contained in the name
-            if (str_contains($lowerName, $key)) {
+            // Use word-boundary regex so "dian" does NOT match inside "Erdiana",
+            // and "erwin" does NOT match inside "Erik", etc.
+            if (preg_match('/\b' . preg_quote($key, '/') . '\b/i', $lowerName)) {
                 return $target;
             }
         }

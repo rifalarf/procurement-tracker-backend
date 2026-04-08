@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Status;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\ActivityLog;
 
 class StatusController extends Controller
 {
@@ -37,6 +38,14 @@ class StatusController extends Controller
 
         $status = Status::create($validated);
 
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'created',
+            'description' => 'Admin menambahkan master status baru: ' . $status->name,
+            'new_values' => $status->toArray(),
+        ]);
+
         return response()->json([
             'message' => 'Status created successfully',
             'data' => $status,
@@ -56,7 +65,18 @@ class StatusController extends Controller
             'is_active' => 'boolean',
         ]);
 
+        $oldValues = $status->only(['name', 'bg_color', 'text_color', 'sort_order', 'is_active']);
+
         $status->update($validated);
+
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'edited',
+            'description' => 'Admin mengubah master status: ' . $status->name,
+            'old_values' => $oldValues,
+            'new_values' => $status->refresh()->only(['name', 'bg_color', 'text_color', 'sort_order', 'is_active']),
+        ]);
 
         return response()->json([
             'message' => 'Status updated successfully',
@@ -77,7 +97,15 @@ class StatusController extends Controller
             ], 422);
         }
 
+        $statusName = $status->name;
         $status->delete();
+
+        ActivityLog::create([
+            'user_id' => request()->user()?->id ?? null,
+            'procurement_item_id' => null,
+            'event_type' => 'deleted',
+            'description' => 'Admin menghapus master status: ' . $statusName,
+        ]);
 
         return response()->json([
             'message' => 'Status deleted successfully',

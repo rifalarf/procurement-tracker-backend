@@ -9,6 +9,10 @@
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    # Handle OPTIONS preflight requests - pass to Laravel for CORS headers
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^ index.php [L]
+
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
@@ -69,9 +73,7 @@ Options -Indexes
     # Referrer policy
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     
-    # CORS headers (already handled by Laravel, but as backup)
-    Header always set Access-Control-Allow-Origin "https://procurehub.my.id"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
-    Header always set Access-Control-Allow-Credentials "true"
+    # NOTE: CORS is fully handled by Laravel (config/cors.php)
+    # Do NOT set Access-Control-Allow-Origin here as it would override
+    # Laravel's dynamic origin checking and break www vs non-www support.
 </IfModule>
